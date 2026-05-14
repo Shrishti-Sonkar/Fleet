@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #faf9f9;
+    color: #1b1c1c;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .rotate-y-12 {
+    transform: rotateY(12deg);
+  }
+
+  .shadow-premium {
+    box-shadow: 0 10px 30px -5px rgba(17, 17, 17, 0.04);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 30px 60px -12px rgba(17, 17, 17, 0.04);
+  }
+
+  .stage-gradient {
+    background: radial-gradient(50% 50% at 50% 50%, rgba(17, 17, 17, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+  }
+
+  .stage-floor {
+    background: radial-gradient(50% 50% at 50% 50%, rgba(255, 107, 0, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+  }
+
+  .active-tab {
+    border-bottom: 2px solid #a04100;
+    font-weight: 700;
+    color: #a04100;
+  }
+
+  .progress-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e5e2e1;
+    transform: translateY(-50%);
+    z-index: 0;
+  }
+
+  .progress-fill {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    height: 2px;
+    background: #ff6b00;
+    transform: translateY(-50%);
+    z-index: 0;
+    transition: width 0.4s ease;
+  }
+
+  .step-active {
+    background-color: #ff6b00;
+    color: white;
+  }
+
+  .step-inactive {
+    background-color: #e5e2e1;
+    color: #5f5e5e;
+  }
+
+  .soft-elevation {
+    box-shadow: 0 30px 60px -12px rgba(17, 17, 17, 0.04);
+  }
+
+  .vehicle-card-shadow {
+    box-shadow: 0 10px 30px -5px rgba(17, 17, 17, 0.04);
+  }
+}
