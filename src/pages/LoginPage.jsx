@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState('signin')
@@ -13,7 +14,7 @@ export default function LoginPage() {
 
   const handleSignIn = (e) => {
     e.preventDefault()
-    navigate('/')
+    navigate(ROUTES.HOME)
   }
 
   const handleSignUp = (e) => {
@@ -32,7 +33,7 @@ export default function LoginPage() {
         <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Welcome aboard!</h3>
         <p className="text-secondary max-w-sm mb-10">Your account has been successfully created. Let's get you on the road.</p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(ROUTES.HOME)}
           className="w-full max-w-xs h-12 bg-primary-container text-white font-bold rounded-xl active:scale-95 transition-all"
         >
           Start Browsing Vehicles

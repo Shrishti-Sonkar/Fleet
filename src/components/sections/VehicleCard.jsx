@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 export default function VehicleCard({ vehicle }) {
   const { id, name, badge, imageUrl, fuelType, cc, dailyPrice, rating, reviewCount } = vehicle
@@ -58,7 +59,7 @@ export default function VehicleCard({ vehicle }) {
           <span className="text-on-surface-variant text-label-md font-medium"> / day</span>
         </div>
         <Link
-          to={`/vehicle/${id}`}
+          to={ROUTES.VEHICLE_DETAIL(id)}
           className="bg-primary-container text-white px-5 py-2.5 rounded-full font-bold text-label-md transition-all active:scale-95 hover:opacity-90"
         >
           Book Now

@@ -1,140 +1,25 @@
 import { Link } from 'react-router-dom'
-import PageLayout from '../components/layout/PageLayout'
+import PageLayout from '@/components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
-import SearchWidget from '../components/sections/SearchWidget'
+
+import HowItWorks from '../components/sections/HowItWorks'
+import PopularVehicles from '../components/sections/PopularVehicles'
 import VehicleCard from '../components/sections/VehicleCard'
 import { mockVehicles, mockCities } from '../data/mockVehicles'
+import { ROUTES } from '@/lib/constants'
+import HeroSection from '@/components/sections/HeroSection'
 
 const featuredVehicles = mockVehicles.slice(0, 4)
 
 export default function HomePage() {
   return (
     <PageLayout>
-      {/* ── Section 1: Hero ── */}
-      <section className="relative min-h-[870px] flex items-center bg-surface-container-lowest overflow-hidden">
-        <div className="max-w-screen-2xl mx-auto px-gutter grid md:grid-cols-12 items-center gap-12 w-full">
-          {/* Left content */}
-          <div className="md:col-span-6 space-y-8 z-10 py-12">
-            <div className="inline-block px-4 py-1.5 bg-primary-fixed text-on-primary-fixed rounded-full font-label-md text-label-md font-bold tracking-wide uppercase">
-              INDIA'S FASTEST-GROWING RENTAL PLATFORM
-            </div>
-            <h1 className="font-display text-display leading-tight">
-              Rent. Ride. Repeat.{' '}
-              <span className="text-primary">Explore the Himalayas</span> on your own terms.
-            </h1>
-
-            <SearchWidget />
-
-            {/* Trust row */}
-            <div className="flex flex-wrap gap-4 items-center opacity-80">
-              {[
-                { icon: 'verified_user', label: 'Verified Hosts' },
-                { icon: 'speed', label: 'Instant Booking' },
-                { icon: 'security', label: 'Fully Insured' },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-high rounded-full">
-                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    {item.icon}
-                  </span>
-                  <span className="text-label-md font-label-md">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right – hero image */}
-          <div className="md:col-span-6 relative h-[600px] flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full blur-3xl opacity-10 bg-primary" />
-            <div className="relative w-full h-full flex items-center justify-center perspective-1000">
-              <div className="bg-surface-container w-4/5 h-[20px] absolute bottom-1/4 rounded-[100%] opacity-20 blur-xl" />
-              <img
-                alt="Luxury Motorcycle"
-                className="w-full h-auto object-contain drop-shadow-2xl z-10 rotate-y-12"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlFTsemsAE3PvgrWne188Q_eHfFfvpyQU-Rypj4BFHMRYRUbga_TmOrwXFe_Xulk5PL6Ae_ELT-_y7gY6nE5RCA8b8Kxq3lVVz_8TgBLlG6e_LLrJU4wVQ-1ziHlW7IXoEv3KcZCJg5Wk8TGHGZB6xfbL1SUUo704PRMEUUSwg2cMP4VIFcLC7HPtwnepE9PHZA3wCsP0d9T9wTIwE5IX4o3DSXXA5pImSxY3dqjZvF06KAV7j25yftGQ5mrh50XjGOe0ZyqoBWhZO"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <HeroSection />
       {/* ── Section 2: How it works ── */}
-      <section className="py-section-padding-lg bg-surface">
-        <div className="max-w-screen-2xl mx-auto px-gutter">
-          <div className="text-center mb-16">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-4">Rent in 3 steps</h2>
-            <div className="w-24 h-1 bg-primary mx-auto rounded-full" />
-          </div>
-          <div className="relative grid md:grid-cols-3 gap-12 text-center">
-            <div className="hidden md:block absolute top-1/4 left-1/4 right-1/4 h-[2px] border-t-2 border-dashed border-outline-variant -z-0" />
-            {[
-              { icon: 'search', title: 'Search', desc: 'Pick your location and find the perfect ride from our curated fleet.' },
-              { icon: 'lock_clock', title: 'Book', desc: 'Verify your ID and make a secure payment to confirm your booking.' },
-              { icon: 'motorcycle', title: 'Ride', desc: 'Pick up the keys from the host and start your Himalayan adventure.' },
-            ].map(step => (
-              <div key={step.title} className="relative z-10 group">
-                <div className="w-20 h-20 bg-surface-container-lowest shadow-premium rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                  <span className="material-symbols-outlined text-primary text-[32px]">{step.icon}</span>
-                </div>
-                <h3 className="font-headline-sm text-headline-sm mb-2">{step.title}</h3>
-                <p className="text-on-surface-variant font-body-lg text-body-lg">{step.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HowItWorks />
 
       {/* ── Section 3: Popular Vehicles ── */}
-      <section className="py-section-padding-lg bg-surface-container-lowest">
-        <div className="max-w-screen-2xl mx-auto px-gutter">
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <h2 className="font-headline-md text-headline-md text-on-surface">Ride what the locals love</h2>
-              <p className="text-on-surface-variant font-body-lg text-body-lg">Our top picks for the week in Uttarakhand.</p>
-            </div>
-            <Link to="/browse" className="flex items-center gap-2 text-primary font-bold hover:underline">
-              View All <span className="material-symbols-outlined">arrow_forward</span>
-            </Link>
-          </div>
-          <div className="flex gap-gutter overflow-x-auto pb-8 snap-x no-scrollbar">
-            {featuredVehicles.map(v => (
-              <div key={v.id} className="min-w-[280px] snap-start">
-                <article className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-premium group">
-                  <div className="bg-surface-container-low rounded-lg h-40 mb-4 overflow-hidden relative">
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent" />
-                    <img
-                      alt={v.name}
-                      className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-300"
-                      src={v.imageUrl}
-                      loading="lazy"
-                    />
-                    {v.badge === 'Popular' && (
-                      <div className="absolute top-2 left-2 bg-on-surface text-surface-lowest px-2 py-0.5 rounded text-[10px] font-bold uppercase">
-                        Popular
-                      </div>
-                    )}
-                  </div>
-                  <h4 className="font-headline-sm text-[20px] mb-1">{v.name}</h4>
-                  <div className="flex items-center gap-1 text-on-surface-variant text-label-md mb-4">
-                    <span className="material-symbols-outlined text-[16px]">
-                      {v.fuelType === 'Electric' ? 'ev_station' : 'bolt'}
-                    </span>
-                    {v.category} • {v.cc}
-                  </div>
-                  <div className="flex justify-between items-center pt-4 border-t border-outline-variant">
-                    <div>
-                      <span className="font-black text-on-surface text-headline-sm">₹{v.dailyPrice.toLocaleString('en-IN')}</span>
-                      <span className="text-on-surface-variant text-label-md">/day</span>
-                    </div>
-                    <Link to={`/vehicle/${v.id}`} className="bg-primary-container p-2 rounded-lg text-white hover:opacity-90 transition-opacity">
-                      <span className="material-symbols-outlined">add</span>
-                    </Link>
-                  </div>
-                </article>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <PopularVehicles vehicles={featuredVehicles} />
 
       {/* ── Section 4: Cities (Dark) ── */}
       <section className="py-section-padding-lg bg-[#111111] text-white">
@@ -275,7 +160,7 @@ export default function HomePage() {
                 Have an idle bike or scooter? List it on Fleet and let your vehicle pay for itself. We handle the insurance and verification.
               </p>
               <Link
-                to="/host"
+                to={ROUTES.HOST}
                 className="inline-block bg-on-primary-container text-primary-container px-10 py-4 rounded-xl font-black hover:scale-105 transition-transform text-body-lg"
               >
                 Get Started as Host

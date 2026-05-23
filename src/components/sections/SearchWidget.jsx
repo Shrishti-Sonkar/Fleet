@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 const vehicleTypes = ['Rent a Bike', 'Scooter', 'Electric']
 
@@ -11,7 +12,7 @@ export default function SearchWidget() {
 
   const handleSearch = (e) => {
     e.preventDefault()
-    navigate('/browse')
+    navigate(ROUTES.BROWSE)
   }
 
   return (

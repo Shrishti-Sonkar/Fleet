@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 export default function SplashPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const timer = setTimeout(() => navigate('/login'), 2500)
+    const timer = setTimeout(() => navigate(ROUTES.LOGIN), 2500)
     return () => clearTimeout(timer)
   }, [navigate])
 

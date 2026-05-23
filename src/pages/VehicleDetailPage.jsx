@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import { mockVehicles } from '../data/mockVehicles'
+import { ROUTES } from '@/lib/constants'
 
 export default function VehicleDetailPage() {
   const { id } = useParams()
@@ -30,9 +31,9 @@ export default function VehicleDetailPage() {
       <main className="max-w-screen-2xl mx-auto px-gutter mt-8 mb-section-padding-lg">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 mb-6" aria-label="Breadcrumb">
-          <Link to="/" className="text-label-md font-label-md text-on-surface-variant hover:text-primary">Fleet</Link>
+          <Link to={ROUTES.HOME} className="text-label-md font-label-md text-on-surface-variant hover:text-primary">Fleet</Link>
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">chevron_right</span>
-          <Link to="/browse" className="text-label-md font-label-md text-on-surface-variant hover:text-primary">Motorcycles</Link>
+          <Link to={ROUTES.BROWSE} className="text-label-md font-label-md text-on-surface-variant hover:text-primary">Motorcycles</Link>
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">chevron_right</span>
           <span className="text-label-md font-label-md text-on-surface font-semibold">{vehicle.name}</span>
         </nav>
@@ -270,7 +271,7 @@ export default function VehicleDetailPage() {
 
                 <button
                   id="book-now-btn"
-                  onClick={() => navigate(`/booking/${vehicle.id}`)}
+                  onClick={() => navigate(ROUTES.BOOKING(vehicle.id))}
                   className="w-full bg-primary-container text-white h-14 rounded-lg font-bold text-body-lg hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary-container/20"
                 >
                   Book Now
