@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import BookingSteps from '../components/sections/BookingSteps'
 import { useBooking } from '../hooks/useBooking'
-import { mockVehicles } from '../data/mockVehicles'
 
 const paymentMethods = [
   { id: 'upi', icon: 'account_balance_wallet', label: 'UPI Payment', sub: 'Google Pay, PhonePe, Paytm' },
@@ -15,15 +17,77 @@ const paymentMethods = [
 export default function BookingPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const vehicle = mockVehicles.find(v => v.id === id) || mockVehicles[0]
-  const { step, nextStep, prevStep, paymentMethod, setPaymentMethod, confirmed, confirmBooking } = useBooking()
+  const { user, userDoc } = useAuth()
+  const [vehicle, setVehicle] = useState(null)
+  const [loadingVehicle, setLoadingVehicle] = useState(true)
+
+  const {
+    step, nextStep, prevStep,
+    pickupDate, setPickupDate,
+    dropoffDate, setDropoffDate,
+    paymentMethod, setPaymentMethod,
+    addons, toggleAddon,
+    confirmed, bookingId, saving,
+    saveBookingToFirestore,
+    initiateRazorpayPayment,
+  } = useBooking()
 
   const [upiId, setUpiId] = useState('')
-  const days = 3
-  const rentalCharge = vehicle.dailyPrice * days
-  const insurance = 1500
+
+  // Fetch vehicle from Firestore
+  useEffect(() => {
+    const fetchVehicle = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'vehicles', id))
+        if (snap.exists()) {
+          setVehicle({ id: snap.id, ...snap.data() })
+        } else {
+          navigate('/browse')
+        }
+      } catch {
+        navigate('/browse')
+      } finally {
+        setLoadingVehicle(false)
+      }
+    }
+    fetchVehicle()
+  }, [id, navigate])
+
+  // Pricing calculation
+  const days =
+    pickupDate && dropoffDate
+      ? Math.max(1, Math.ceil((new Date(dropoffDate) - new Date(pickupDate)) / 86400000))
+      : 3
+  const rentalCharge = (vehicle?.dailyPrice || 0) * days
+  const insurance = addons.insurance ? 1500 : 0
   const gst = Math.round((rentalCharge + insurance) * 0.18)
   const total = rentalCharge + insurance + gst
+  const pricing = { days, rentalCharge, insurance, gst, total }
+
+  const handleConfirmBooking = () => {
+    if (!vehicle) return
+    const rzpKey = import.meta.env.VITE_RAZORPAY_KEY_ID || ''
+    if (rzpKey.includes('test') || rzpKey.includes('YOUR')) {
+      // Demo/test mode: save directly
+      saveBookingToFirestore(vehicle, pricing)
+    } else {
+      initiateRazorpayPayment(vehicle, pricing, (paymentId) => {
+        saveBookingToFirestore(vehicle, pricing, paymentId)
+      })
+    }
+  }
+
+  // Show loading while fetching vehicle
+  if (loadingVehicle) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-12 h-12 border-4 border-primary-container border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // Fallback if vehicle not found
+  if (!vehicle) return null
 
   if (confirmed) {
     return (
@@ -35,8 +99,10 @@ export default function BookingPage() {
             </svg>
           </div>
           <h2 className="font-headline-md text-headline-md mb-2">Booking Confirmed!</h2>
-          <p className="text-body-lg text-secondary mb-4">Your {vehicle.name} is ready for pickup.</p>
-          <p className="text-label-md text-on-surface-variant mb-8">Booking ID: <span className="font-bold text-primary">FLT-{Date.now().toString().slice(-6)}</span></p>
+          <p className="text-body-lg text-secondary mb-2">Your {vehicle.name} is ready for pickup.</p>
+          <p className="text-label-md text-on-surface-variant mb-8">
+            Booking ID: <span className="font-bold text-primary">{bookingId}</span>
+          </p>
           <div className="space-x-4">
             <button
               onClick={() => navigate('/')}
@@ -45,10 +111,10 @@ export default function BookingPage() {
               Go Home
             </button>
             <Link
-              to="/browse"
+              to="/my-bookings"
               className="inline-flex h-12 px-8 border-2 border-primary text-primary font-bold rounded-lg hover:bg-primary-fixed/20 active:scale-95 transition-all items-center"
             >
-              Browse More
+              My Bookings
             </Link>
           </div>
         </div>
@@ -139,10 +205,11 @@ export default function BookingPage() {
                 </button>
                 <button
                   id="pay-btn"
-                  onClick={confirmBooking}
-                  className="h-12 px-10 bg-primary-container text-white font-bold rounded-lg shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center gap-2"
+                  onClick={handleConfirmBooking}
+                  disabled={saving}
+                  className="h-12 px-10 bg-primary-container text-white font-bold rounded-lg shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Pay ₹{total.toLocaleString('en-IN')}
+                  {saving ? 'Processing...' : `Pay ₹${total.toLocaleString('en-IN')}`}
                   <span className="material-symbols-outlined">shield</span>
                 </button>
               </div>

@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react'
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { useAuth } from '../context/AuthContext'
+import PageLayout from '../components/layout/PageLayout'
+import { Link } from 'react-router-dom'
+
+const statusConfig = {
+  pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: 'pending' },
+  approved: { label: 'Approved', color: 'bg-green-100 text-green-800', icon: 'check_circle' },
+  active: { label: 'Active', color: 'bg-blue-100 text-blue-800', icon: 'directions_car' },
+  completed: { label: 'Completed', color: 'bg-surface-container text-secondary', icon: 'done_all' },
+  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: 'cancel' },
+}
+
+export default function MyBookingsPage() {
+  const { user } = useAuth()
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')
+
+  useEffect(() => {
+    if (!user) return
+    const q = query(
+      collection(db, 'bookings'),
+      where('renterId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+    )
+    const unsub = onSnapshot(q, (snap) => {
+      setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [user])
+
+  const filtered = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter)
+
+  return (
+    <PageLayout>
+      <div className="max-w-3xl mx-auto px-4 py-10">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-on-surface mb-1">My Bookings</h1>
+          <p className="text-secondary text-label-md">All your rental history on Fleet</p>
+        </div>
+
+        {/* Filter chips */}
+        <div className="flex gap-2 flex-wrap mb-6">
+          {['all', 'pending', 'approved', 'active', 'completed', 'cancelled'].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`h-8 px-4 rounded-full text-label-md font-medium capitalize transition-all ${
+                filter === f
+                  ? 'bg-on-surface text-white'
+                  : 'bg-surface-container text-secondary hover:text-on-surface'
+              }`}
+            >
+              {f === 'all' ? 'All' : statusConfig[f]?.label || f}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-10 h-10 border-4 border-primary-container border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20 bg-surface-container-lowest border border-outline-variant rounded-2xl">
+            <span className="material-symbols-outlined text-6xl text-secondary mb-4 block" style={{ fontVariationSettings: "'FILL' 0" }}>
+              confirmation_number
+            </span>
+            <h3 className="font-bold text-on-surface mb-2">
+              {filter === 'all' ? 'No bookings yet' : `No ${filter} bookings`}
+            </h3>
+            <p className="text-secondary text-label-md mb-6">
+              {filter === 'all' ? 'Start your journey with Fleet' : 'Switch filter to see other bookings'}
+            </p>
+            {filter === 'all' && (
+              <Link
+                to="/browse"
+                className="bg-primary-container text-white px-6 py-2.5 rounded-xl font-bold hover:opacity-90 transition-all"
+              >
+                Browse Vehicles
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map((b) => {
+              const status = statusConfig[b.status] || statusConfig.pending
+              return (
+                <div
+                  key={b.id}
+                  className="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden hover:shadow-soft transition-all"
+                >
+                  {/* Vehicle image strip */}
+                  {b.vehicleImage && (
+                    <div className="h-36 bg-surface-container overflow-hidden">
+                      <img
+                        src={b.vehicleImage}
+                        alt={b.vehicleName}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="font-bold text-on-surface">{b.vehicleName}</h3>
+                        <p className="text-label-md text-secondary">{b.city}</p>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${status.color}`}>
+                        <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>{status.icon}</span>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                      <div className="bg-surface-container rounded-xl p-3">
+                        <p className="text-[11px] text-secondary uppercase tracking-wide mb-1">Pickup</p>
+                        <p className="font-bold text-on-surface text-label-md">{b.pickupDate || '—'}</p>
+                      </div>
+                      <div className="bg-surface-container rounded-xl p-3">
+                        <p className="text-[11px] text-secondary uppercase tracking-wide mb-1">Return</p>
+                        <p className="font-bold text-on-surface text-label-md">{b.dropoffDate || '—'}</p>
+                      </div>
+                      <div className="bg-surface-container rounded-xl p-3">
+                        <p className="text-[11px] text-secondary uppercase tracking-wide mb-1">Duration</p>
+                        <p className="font-bold text-on-surface text-label-md">{b.totalDays} day{b.totalDays !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-outline-variant">
+                      <div>
+                        <p className="text-[11px] text-secondary uppercase tracking-wide">Booking ID</p>
+                        <p className="font-bold text-on-surface text-label-md">{b.bookingId}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] text-secondary uppercase tracking-wide">Total Paid</p>
+                        <p className="font-bold text-primary-container text-lg">₹{b.pricing?.total?.toLocaleString('en-IN')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </PageLayout>
+  )
+}

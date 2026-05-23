@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fleet — Seed Firestore Vehicles</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 20px; background: #faf9f9; }
+    h1 { color: #a04100; }
+    button { background: #ff6b00; color: white; border: none; padding: 14px 32px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #log { margin-top: 24px; background: #1b1c1c; color: #fff; padding: 16px; border-radius: 12px; font-family: monospace; font-size: 13px; min-height: 100px; white-space: pre-wrap; }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>🚗 Fleet — Seed Vehicles to Firestore</h1>
+  <p>Yeh page 8 mock vehicles ko Firebase Firestore mein upload karega.</p>
+  <p><strong>Project:</strong> fleetmobilities-3ee31</p>
+  <button id="seedBtn" onclick="seedVehicles()">🚀 Seed 8 Vehicles to Firestore</button>
+  <div id="log">Ready. Click button to start seeding...</div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD8tk7L9fR__bDOXstAGiih_Ht57j10GXk",
+      authDomain: "fleetmobilities-3ee31.firebaseapp.com",
+      projectId: "fleetmobilities-3ee31",
+      storageBucket: "fleetmobilities-3ee31.firebasestorage.app",
+      messagingSenderId: "172961747786",
+      appId: "1:172961747786:web:9754769b0ca6e4dfcce7b3"
+    }
+
+    const app = initializeApp(firebaseConfig)
+    const db = getFirestore(app)
+
+    const vehicles = [
+      {
+        name: 'Royal Enfield Himalayan 450', type: 'Bike', category: 'Adventure', badge: 'Popular',
+        city: 'Dehradun', dailyPrice: 1200, rating: 4.8, reviewCount: 124, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '450cc', mileage: '32 kmpl', hasHelmet: true, hasGPS: true,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC18Z9fMEubX2dRDhNSwa3QyPRPPbKwEiEFpOgrjRQCfhYEInI6I3ANTe6slxWi7wQIWs-USf8L0OY6GpgBKPAeieL7iyUjvUOrjs3EenCz8Fam-Vf3vAe9Q1u1QiMYZo4upjLztI7YptR23lknR_S-gKtFdWBqXnelBVt-PN_zrIPWRVQEqbS29wJidCrRr2vKB4LmKO2pZ8PIYb_32n9uJrMgLJyMo4HzYT793GUi4jIVZEn9cZyLsnEsgnwhurEfl478fOKbYvJO',
+        hostName: 'Rahul S.', hostRating: 4.9, hostReviews: 128, status: 'active', securityDeposit: 5000,
+        description: 'Experience the timeless adventure of the Royal Enfield Himalayan 450 through the scenic winding roads of Dehradun and Mussoorie.',
+        features: ['Electric Start', 'ABS', 'LED Headlamp', 'USB Charging'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'Royal Enfield Classic 350', type: 'Bike', category: 'Luxury', badge: 'Luxury',
+        city: 'Dehradun', dailyPrice: 900, rating: 4.9, reviewCount: 120, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '349cc', mileage: '35 kmpl', hasHelmet: true, hasGPS: false,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCKk3GhwZVuxYssFdLwUKWBMVrx-d5_1FP4wh3rjE-5LdZePhFvnNfPopqWaNTqj5yEEPcRspQzg33xXxIrwoDiXN4wJYjupwoyTNWyIW9R51eHoX_BzjsO01HHSYByCBQ6YM4Dkl_hR8QlPoLjpWWUtqdRYQwh5jIZ18TvrQZGvFyvPRGdNh-TIDd-9BnjxU184ok_Dg-sCjkf4GG6oP7CjJ7LN2a7c4cHmmRvUgZN4v805kWCDo1mhoSWp70rb8xxosJd0VvELTWn',
+        hostName: 'Arjun S.', hostRating: 4.9, hostReviews: 64, status: 'active', securityDeposit: 4000,
+        description: 'The iconic Royal Enfield Classic 350 with the updated J-Platform engine. Smooth ride without losing the signature thump.',
+        features: ['Dual Channel ABS', 'Halogen Headlamp', 'Electric Start', 'Saddlebags'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'KTM Duke 390', type: 'Bike', category: 'Sports', badge: 'Sports',
+        city: 'Mussoorie', dailyPrice: 1100, rating: 4.7, reviewCount: 64, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '373cc', mileage: '28 kmpl', hasHelmet: true, hasGPS: true,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDrgKEda3_KHni8MQWJOzAXX5nDhtOvcolL24oMOLjqpyGZbGWu5CIHf0HNLYSIa9LJXT7J9Odq8kNrjnuYFIkSCuNnqVFx10Ge93bBxvDSbx-CBod8M0MDYe4IqE7DkzWbrkbOksLWy6yMVpv8V8B-lqixsBfFQGtVyxw0uMpRr_k9_2vitAyBaF8NgTdJvXuV25RJR0Mffxh_05QzGESCi2Qdu7_K7tdE47CNnLh1bdxKqNEhMTUfEK24BeixXHfr6r4UiVKkVUwe',
+        hostName: 'Priya M.', hostRating: 4.8, hostReviews: 42, status: 'active', securityDeposit: 5000,
+        description: 'The KTM Duke 390 — pure sports aggression on mountain roads. TFT display, cornering ABS.',
+        features: ['Cornering ABS', 'TFT Display', 'Quickshifter', 'LED Lighting'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'Ather 450X Gen 3', type: 'Scooter', category: 'Electric', badge: 'Electric',
+        city: 'Dehradun', dailyPrice: 450, rating: 4.9, reviewCount: 210, available: true,
+        fuelType: 'Electric', seats: 2, cc: 'Electric', mileage: '85km Range', hasHelmet: true, hasGPS: true,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI4FImTr4kbty0sXgkCqsBgzTLCUkdS5b0jMFP0JFh3snaaDu1wI733Y4dJ21QOKdERbBtiypt1SCU0l0czA1NYd9RyQlWDAAwrgOZKXqTiBUlB1mv9swKZp7MQdeeuapODLHCUNRTt3g159ntVApSvcO_i9U2FTgjHLCH3OnoompnA9U9dwHqnCYE5br1Ui4mAln7cM_6inn8YiVN6mn1wVwBFi1PQySG6Rqob0dXb9lchmHlY8WS9r9QPD7GSVogL85asQ-nw7An',
+        hostName: 'Sneha K.', hostRating: 5.0, hostReviews: 98, status: 'active', securityDeposit: 3000,
+        description: 'The Ather 450X Gen 3 — fast charging, connected features, and zero emissions in Dehradun.',
+        features: ['85km Range', 'Fast Charging', 'Connected Dashboard', 'Reverse Mode'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'Honda Activa 6G', type: 'Scooter', category: 'Utility', badge: 'Utility',
+        city: 'Rishikesh', dailyPrice: 350, rating: 4.5, reviewCount: 450, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '109cc', mileage: '50 kmpl', hasHelmet: true, hasGPS: false,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDpVITDGhM3n5aTw6kMxveArispcmd6qcWWsc_n8fRGParbLC9HCbonos3MkBAbMqq-NWsy-2wf3OrloNeBz2fQDpB0_4CclOt0gZC_9oxnUs6bCof0nivbRzvEif4Q4Tc6LJZjkUSmx6xlpcxQHuYaE5VDrtj-Z2tjK8Dl9VELqQkLv4Qg7DwYFx44kQepZmEzAlf8_kZU5JL57TEutaCSIJoMU1nSKJQsB5xS_qWka1lsiHDrFCQ3z5GF2t6aED_TrBMSPq1Ik6Qf',
+        hostName: 'Vikram T.', hostRating: 4.6, hostReviews: 215, status: 'active', securityDeposit: 2000,
+        description: 'India\'s most trusted scooter. Perfect for city rides and short mountain excursions in Rishikesh.',
+        features: ['Silent Start', 'LED Headlamp', 'Combi Brake', 'Under-seat Storage'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'Royal Enfield Interceptor 650', type: 'Bike', category: 'Premium', badge: 'Premium',
+        city: 'Mussoorie', dailyPrice: 1800, rating: 5.0, reviewCount: 42, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '648cc', mileage: '25 kmpl', hasHelmet: true, hasGPS: true,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDhXcz8HBm-XeX9U7432ZnWIjZXBK9RenHr3kwXYF5xu5qbZOvEs2dg4u2TFi63sjaODK-jgqMrfU1j6wOexBBzi2EWXErO-t7bXfC8VhJlWGBfVg9bvT7ZdSERNczAsBH9iBmVTmvWHPcs5AwnT5kUuF8o2mnZVwyO84LvkXsygg3XMa6Ff4pXEbOQKjvu9FNyEpFLGHPd0rGGQubeXtz40_x4DvaKbVEtABiOhYWepB_0nuXuKE4T_AuitmA2x2pIvEPjm9sJZlV7',
+        hostName: 'Aditya R.', hostRating: 5.0, hostReviews: 28, status: 'active', securityDeposit: 8000,
+        description: 'Twin-cylinder, chrome-drenched perfection. The sound alone is worth the experience.',
+        features: ['648cc Twin Engine', 'Dual Channel ABS', 'Chrome Accents', 'Low Seat Height'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'Vespa VXL 150', type: 'Scooter', category: 'Luxury', badge: 'Luxury',
+        city: 'Dehradun', dailyPrice: 599, rating: 4.6, reviewCount: 88, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '150cc', mileage: '44 kmpl', hasHelmet: true, hasGPS: false,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBE2hRzlIzPOb7v5StK3sX3MabyTqcW0Y9vaHzDqmP0GN8pQ2sD-8oRd1UKcUzcAVHA6v7NMLFRobdx2Zv3CPbK4ld35_J2s3BejKpvTt4XaEaGHQIsPMO4lJig9Ae8mzRQfqM5GLccpZOLM4hEPwoJtGC-TLsj2D7kCHKFIwGgd_lLiQx3p21eYeDFVnp-NyD3MOpMfBSuzaRJzzc8N5jxD8rxGvNWaPZdPCAdQhCtxS4kdgJTCty3mcAbyXTJHBkxbag_FWBQv93P',
+        hostName: 'Meera S.', hostRating: 4.7, hostReviews: 52, status: 'active', securityDeposit: 3000,
+        description: 'The iconic Italian design meets Indian roads. Premium build with smooth 150cc performance.',
+        features: ['Disc Brake', 'LED Headlamp', 'Bluetooth Connectivity', 'Smart Key'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+      {
+        name: 'KTM Duke 250', type: 'Bike', category: 'Sports', badge: 'Sports',
+        city: 'Rishikesh', dailyPrice: 800, rating: 4.6, reviewCount: 72, available: true,
+        fuelType: 'Petrol', seats: 2, cc: '248cc', mileage: '30 kmpl', hasHelmet: true, hasGPS: false,
+        imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBhOVLEZBRCmAk9mOz54epe2CleWeF5R6ZGbZOXdpSi_6665tpd8vZ8dP0fsGNJrWVRrm5uCSquSv6MEsmrmMGtZM_KQ3WZlaHBkLOoVF5s19XIbyzjvyQ9XsxFelPaIb9wZRqFBDb-Pe0bd3r7nZZ0fbk726aR3AOROX6u8H75RuAxfvC1GRQPvl2CKISOo7d6_Jn9zn4GZPCeNBeaKkRlhUYUITCz_hBPtj-YcyWesclJSKfCh2PeysAAZ6JGJ2qmLTHmUToKIWOi',
+        hostName: 'Rohan G.', hostRating: 4.5, hostReviews: 38, status: 'active', securityDeposit: 4000,
+        description: 'Sporty, agile, and perfectly sized for mountain hairpins. Lightweight chassis with WP suspension.',
+        features: ['Single Cylinder', 'Slipper Clutch', 'LED Lighting', 'Adjustable Levers'],
+        ownerId: 'ADMIN', ownerName: 'Fleet Admin',
+      },
+    ]
+
+    window.seedVehicles = async function() {
+      const btn = document.getElementById('seedBtn')
+      const log = document.getElementById('log')
+      btn.disabled = true
+      log.textContent = '🚀 Seeding vehicles to Firestore...\n\n'
+
+      let success = 0
+      let failed = 0
+
+      for (const v of vehicles) {
+        try {
+          const docRef = await addDoc(collection(db, 'vehicles'), {
+            ...v,
+            createdAt: serverTimestamp(),
+          })
+          success++
+          log.innerHTML += `<span class="success">✅ Added: ${v.name} (${v.city}) — ID: ${docRef.id}</span>\n`
+        } catch (err) {
+          failed++
+          log.innerHTML += `<span class="error">❌ Failed: ${v.name} — ${err.message}</span>\n`
+        }
+      }
+
+      log.innerHTML += `\n<strong style="color:#ff6b00">Done! ${success} vehicles added, ${failed} failed.</strong>`
+      if (success > 0) {
+        log.innerHTML += `\n\n<span class="success">🎉 Go to http://localhost:5173/browse to see your vehicles!</span>`
+      }
+      btn.disabled = false
+    }
+  </script>
+</body>
+</html>
