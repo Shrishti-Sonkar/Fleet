@@ -32,6 +32,14 @@ function PageLoader() {
   )
 }
 
+// New pages
+import VerificationPage from './pages/VerificationPage'
+import OwnerDashboard from './pages/OwnerDashboard'
+import AdminDashboard from './pages/AdminDashboard'
+import ProfilePage from './pages/ProfilePage'
+import MyBookingsPage from './pages/MyBookingsPage'
+import AddVehiclePage from './pages/AddVehiclePage'
+
 export default function App() {
   return (
     <BrowserRouter>

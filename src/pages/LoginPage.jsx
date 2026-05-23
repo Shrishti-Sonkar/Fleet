@@ -10,16 +10,46 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('')
   const [remember, setRemember] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [error, setError] = useState('')
+  const [loadingState, setLoadingState] = useState(false)
   const navigate = useNavigate()
+  const { signin, signup, googleSignin } = useAuth()
 
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault()
     navigate(ROUTES.HOME)
   }
 
-  const handleSignUp = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault()
-    setShowSuccess(true)
+    setError('')
+    if (!name.trim()) return setError('Name is required')
+    if (password.length < 8) return setError('Password must be 8+ characters')
+    setLoadingState(true)
+    try {
+      await signup(email, password, name, phone)
+      toast.success('Account created! Welcome to Fleet.')
+      setShowSuccess(true)
+    } catch (err) {
+      const msg =
+        err.code === 'auth/email-already-in-use'
+          ? 'Email already registered. Please sign in.'
+          : 'Signup failed. Please try again.'
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setLoadingState(false)
+    }
+  }
+
+  const handleGoogle = async () => {
+    try {
+      await googleSignin()
+      toast.success('Signed in with Google!')
+      navigate('/')
+    } catch {
+      toast.error('Google sign-in failed')
+    }
   }
 
   if (showSuccess) {
@@ -101,7 +131,7 @@ export default function LoginPage() {
 
               {/* Social buttons */}
               <div className="grid grid-cols-3 gap-4">
-                <button id="google-login" className="flex items-center justify-center py-3 border border-outline-variant rounded-xl hover:bg-surface transition-all active:scale-95 duration-150">
+                <button id="google-login" onClick={handleGoogle} className="flex items-center justify-center py-3 border border-outline-variant rounded-xl hover:bg-surface transition-all active:scale-95 duration-150">
                   <img alt="Google" className="w-6 h-6"
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU" />
                 </button>
@@ -157,12 +187,16 @@ export default function LoginPage() {
                   />
                   <label htmlFor="remember" className="font-label-md text-label-md text-secondary cursor-pointer">Keep me signed in</label>
                 </div>
+                {error && (
+                  <p className="text-error text-label-md bg-red-50 border border-red-200 px-4 py-3 rounded-lg">{error}</p>
+                )}
                 <button
                   type="submit"
                   id="signin-btn"
-                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all"
+                  disabled={loadingState}
+                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Sign In to Fleet
+                  {loadingState ? 'Signing in...' : 'Sign In to Fleet'}
                 </button>
               </form>
 
@@ -200,6 +234,8 @@ export default function LoginPage() {
                     id="signup-email"
                     type="email"
                     placeholder="name@example.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                     className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
                   />
                 </div>
@@ -223,6 +259,8 @@ export default function LoginPage() {
                     id="signup-password"
                     type="password"
                     placeholder="Min. 8 characters"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
                     className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
                   />
                 </div>
@@ -233,12 +271,16 @@ export default function LoginPage() {
                     <a href="#" className="text-primary underline">Privacy Policy</a>.
                   </p>
                 </div>
+                {error && (
+                  <p className="text-error text-label-md bg-red-50 border border-red-200 px-4 py-3 rounded-lg">{error}</p>
+                )}
                 <button
                   type="submit"
                   id="signup-btn"
-                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all"
+                  disabled={loadingState}
+                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Create Account
+                  {loadingState ? 'Creating account...' : 'Create Account'}
                 </button>
               </form>
             </div>
