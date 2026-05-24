@@ -3,6 +3,7 @@ export const ROUTES = {
   SPLASH: '/splash',
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
+  CHOOSE_ROLE: '/choose-role',
   BROWSE: '/browse',
   HOST: '/host',
   ABOUT: '/about',
@@ -14,6 +15,12 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   ADD_VEHICLE: '/add-vehicle',
   ADMIN: '/admin',
+
+  // Vendor routes
+  VENDOR_HOME: '/vendor',
+  VENDOR_DASHBOARD: '/vendor/dashboard',
+  VENDOR_ADD: '/vendor/add-vehicle',
+  VENDOR_EARNINGS: '/vendor/earnings',
 
   VEHICLE_DETAIL: (id = ':id') => `/vehicle/${id}`,
   BOOKING: (id = ':id') => `/booking/${id}`,

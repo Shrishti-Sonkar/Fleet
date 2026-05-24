@@ -28,8 +28,35 @@ const faqItems = [
 ]
 
 export default function HostPage() {
-  const { user, userDoc } = useAuth()
+  const { user, userDoc, isRenter } = useAuth()
   const navigate = useNavigate()
+
+  // ── Renter gate: redirect renters to switch role ──────────────────────────
+  if (user && isRenter) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">
+        <div className="max-w-xs">
+          <div className="text-6xl mb-6">🏢</div>
+          <h2 className="text-xl font-black text-black mb-2">Want to earn with Fleet?</h2>
+          <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+            Switch to Vendor mode to list your vehicle and start earning on Fleet. You can switch back anytime.
+          </p>
+          <button
+            onClick={() => navigate('/profile')}
+            className="w-full bg-black text-white font-bold py-3.5 rounded-2xl text-sm hover:bg-gray-900 active:scale-95 transition-all"
+          >
+            Switch to Vendor in Profile →
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full mt-3 text-sm text-gray-400 hover:text-black transition-colors py-2"
+          >
+            ← Back to browsing
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const [activeVehicleType, setActiveVehicleType] = useState('suv')
   const [daysPerMonth, setDaysPerMonth] = useState(15)

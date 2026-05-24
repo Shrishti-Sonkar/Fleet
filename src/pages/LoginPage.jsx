@@ -2,11 +2,28 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '../context/AuthContext'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const { signin, signup, googleSignin, sendOTP, verifyOTP } = useAuth()
+
+  // ── Role-aware post-login redirect ────────────────────────────────────────
+  const handlePostLogin = async (firebaseUser) => {
+    try {
+      const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid))
+      if (!userSnap.exists() || !userSnap.data().role) {
+        navigate(ROUTES.CHOOSE_ROLE, { replace: true })
+      } else {
+        const role = userSnap.data().role
+        navigate(role === 'vendor' ? ROUTES.VENDOR_HOME : ROUTES.HOME, { replace: true })
+      }
+    } catch {
+      navigate(ROUTES.HOME, { replace: true })
+    }
+  }
 
   // ── Top-level tab: Sign In / Sign Up ─────────────────────────────────────
   const [activeTab, setActiveTab] = useState('signin')
@@ -65,9 +82,9 @@ export default function LoginPage() {
     setSigninError('')
     setSigninLoading(true)
     try {
-      await signin(email, password, rememberMe)
+      const cred = await signin(email, password, rememberMe)
       toast.success('Welcome back to Fleet!')
-      navigate(ROUTES.HOME)
+      await handlePostLogin(cred.user)
     } catch (err) {
       const msg =
         err.code === 'auth/invalid-credential'
@@ -84,9 +101,9 @@ export default function LoginPage() {
 
   const handleGoogle = async () => {
     try {
-      await googleSignin()
+      const cred = await googleSignin()
       toast.success('Signed in with Google!')
-      navigate(ROUTES.HOME)
+      await handlePostLogin(cred.user)
     } catch {
       toast.error('Google sign-in failed')
     }
@@ -140,9 +157,9 @@ export default function LoginPage() {
     }
     setVerifyingOtp(true)
     try {
-      await verifyOTP(otpString)
+      const cred = await verifyOTP(otpString)
       toast.success('Phone verified! Welcome to Fleet 🎉')
-      navigate('/')
+      await handlePostLogin(cred.user)
     } catch (err) {
       const msg =
         err.code === 'auth/invalid-verification-code'
@@ -213,10 +230,10 @@ export default function LoginPage() {
         <h3 className="text-headline-sm font-bold text-on-surface mb-2">Welcome aboard!</h3>
         <p className="text-secondary max-w-sm mb-10">Your account has been successfully created. Let's get you on the road.</p>
         <button
-          onClick={() => navigate(ROUTES.HOME)}
+          onClick={() => navigate(ROUTES.CHOOSE_ROLE)}
           className="w-full max-w-xs h-12 bg-primary-container text-white font-bold rounded-full active:scale-95 transition-all"
         >
-          Start Browsing Vehicles →
+          Choose Your Role →
         </button>
       </div>
     )

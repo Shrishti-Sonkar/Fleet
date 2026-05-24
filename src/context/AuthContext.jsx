@@ -29,14 +29,14 @@ export function AuthProvider({ children }) {
     const snap = await getDoc(userRef)
     if (snap.exists()) {
       const data = snap.data()
+      const updates = {}
       if (data.tokens === undefined) {
-        // Automatically migrate/initialize tokens for existing users
-        const updatedFields = {
-          tokens: 10,
-          tokensUsed: 0
-        }
-        await setDoc(userRef, updatedFields, { merge: true })
-        return { ...data, ...updatedFields }
+        updates.tokens = 10
+        updates.tokensUsed = 0
+      }
+      if (Object.keys(updates).length > 0) {
+        await setDoc(userRef, updates, { merge: true })
+        return { ...data, ...updates }
       }
       return data
     }
@@ -81,11 +81,11 @@ export function AuthProvider({ children }) {
       name,
       email,
       phone: phone || '',
-      role: 'renter',
+      // role is NOT set here — set on RoleSelectionPage
       kycStatus: 'not_submitted',
       isVerified: false,
       verifiedBadge: false,
-      tokens: 10,       // New users get 10 free tokens (1 token = 1 hr)
+      tokens: 10,
       tokensUsed: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -112,7 +112,7 @@ export function AuthProvider({ children }) {
         name: cred.user.displayName || '',
         email: cred.user.email || '',
         phone: cred.user.phoneNumber || '',
-        role: 'renter',
+        // role is NOT set here — set on RoleSelectionPage
         kycStatus: 'not_submitted',
         isVerified: false,
         verifiedBadge: false,
@@ -179,7 +179,7 @@ export function AuthProvider({ children }) {
         name: '',
         email: '',
         phone: cred.user.phoneNumber,
-        role: 'renter',
+        // role is NOT set here — set on RoleSelectionPage
         kycStatus: 'not_submitted',
         isVerified: false,
         verifiedBadge: false,
@@ -196,12 +196,18 @@ export function AuthProvider({ children }) {
   const isOwner = () => userDoc?.role === 'owner' || userDoc?.role === 'admin'
   const isKycApproved = () => userDoc?.kycStatus === 'approved'
 
+  // Role helpers — derived from userDoc (no extra state)
+  const userRole = userDoc === null ? null : (userDoc?.role ?? undefined)
+  const isVendor = userRole === 'vendor'
+  const isRenter = userRole === 'renter'
+
   return (
     <AuthContext.Provider value={{
       user, userDoc, loading,
       signup, signin, googleSignin, logout, resetPassword,
       sendOTP, verifyOTP,
       refreshUserDoc, isAdmin, isOwner, isKycApproved,
+      userRole, isVendor, isRenter,
     }}>
       {!loading && children}
     </AuthContext.Provider>

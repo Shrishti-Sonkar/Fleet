@@ -2,12 +2,12 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 // Loading spinner shared component
-function LoadingSpinner({ full = true }) {
+function LoadingSpinner({ full = true, dark = false }) {
   return (
-    <div className={`${full ? 'min-h-screen' : ''} flex items-center justify-center bg-background`}>
+    <div className={`${full ? 'min-h-screen' : ''} flex items-center justify-center ${dark ? 'bg-black' : 'bg-background'}`}>
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary-container border-t-transparent rounded-full animate-spin" />
-        <p className="text-label-md text-secondary">Loading Fleet...</p>
+        <div className={`w-12 h-12 border-4 ${dark ? 'border-white/30 border-t-white' : 'border-primary-container border-t-transparent'} rounded-full animate-spin`} />
+        {!dark && <p className="text-label-md text-secondary">Loading Fleet...</p>}
       </div>
     </div>
   )
@@ -62,5 +62,35 @@ export function OwnerRoute({ children }) {
   if (userDoc?.role !== 'owner' && userDoc?.role !== 'admin') {
     return <Navigate to="/host" replace />
   }
+  return children
+}
+
+/**
+ * RoleRoute — only allow users with a specific role.
+ * - Not logged in → /login
+ * - Role not yet loaded (undefined) → tiny dark spinner (< 500ms)
+ * - Role loaded but null (no role set) → /choose-role
+ * - Wrong role → correct home
+ * - Correct role → render
+ */
+export function RoleRoute({ allowedRole, children }) {
+  const { user, userRole } = useAuth()
+
+  if (!user) return <Navigate to="/login" replace />
+
+  // Role not yet loaded from Firestore — brief moment only
+  if (userRole === undefined) return <LoadingSpinner dark />
+
+  // No role set yet — send to role selection
+  if (userRole === null) return <Navigate to="/choose-role" replace />
+
+  // Admin bypass — always allow access regardless of role
+  if (userRole === 'admin') return children
+
+  // Wrong role — redirect to correct home
+  if (userRole !== allowedRole) {
+    return <Navigate to={userRole === 'vendor' ? '/vendor' : '/'} replace />
+  }
+
   return children
 }

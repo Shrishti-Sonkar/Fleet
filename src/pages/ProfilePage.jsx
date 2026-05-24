@@ -8,7 +8,7 @@ import PageLayout from '../components/layout/PageLayout'
 import toast from 'react-hot-toast'
 
 export default function ProfilePage() {
-  const { user, userDoc, logout, isAdmin, isOwner, refreshUserDoc } = useAuth()
+  const { user, userDoc, logout, isAdmin, isOwner, refreshUserDoc, isVendor, isRenter } = useAuth()
   const navigate = useNavigate()
 
   // ── Profile edit ──────────────────────────────────────────────────────────
@@ -46,6 +46,22 @@ export default function ProfilePage() {
     await logout()
     navigate('/login')
     toast.success('Logged out successfully')
+  }
+
+  const handleSwitchRole = async () => {
+    const newRole = isVendor ? 'renter' : 'vendor'
+    const confirmed = window.confirm(
+      `Switch to ${newRole} mode? You'll be taken to your new home screen. You can switch back anytime.`
+    )
+    if (!confirmed) return
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { role: newRole })
+      await refreshUserDoc()
+      toast.success(`Switched to ${newRole} mode!`)
+      navigate(newRole === 'vendor' ? '/vendor' : '/', { replace: true })
+    } catch {
+      toast.error('Failed to switch role. Try again.')
+    }
   }
 
   // ── Camera handlers ───────────────────────────────────────────────────────
@@ -391,6 +407,27 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
+
+            {/* Account Type / Role Switcher */}
+            <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4">
+              <p className="text-xs text-secondary mb-1 font-medium">Account Type</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-on-surface">
+                    {isVendor ? '🏢 Vehicle Owner (Vendor)' : isRenter ? '🚗 Renter' : '— Not set'}
+                  </p>
+                  <p className="text-xs text-secondary mt-0.5">
+                    {isVendor ? 'You can list vehicles and earn' : 'You can browse and book vehicles'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleSwitchRole}
+                className="mt-3 text-sm font-bold text-primary hover:underline flex items-center gap-1"
+              >
+                Switch to {isVendor ? 'Renter' : 'Vendor'} account →
+              </button>
+            </div>
 
             {/* Logout */}
             <button
