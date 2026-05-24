@@ -24,21 +24,17 @@ export function useBooking() {
   const saveBookingToFirestore = async (
     vehicle,
     pricing,
-    paymentId = 'DEMO_' + Date.now(),
+    paymentInfo = null,
   ) => {
     if (!user || !vehicle) return null
     setSaving(true)
     try {
-      const bid = 'FLT-' + Date.now().toString().slice(-6)
-
-      // Use passed pricing fields (Batch 4 BookingPage passes full object)
       const pDate = pricing.pickupDate || pickupDate
       const dDate = pricing.dropoffDate || dropoffDate
       const pTime = pricing.pickupTime || '10:00'
       const dTime = pricing.dropoffTime || '10:00'
 
-      await addDoc(collection(db, 'bookings'), {
-        bookingId: bid,
+      const bookingDetails = {
         renterId: user.uid,
         renterName: userDoc?.name || user.displayName || 'Guest',
         renterEmail: user.email,
@@ -66,15 +62,47 @@ export function useBooking() {
           securityDeposit: vehicle.securityDeposit || 5000,
         },
         addons,
+        city: vehicle.city,
+        paymentMethod,
+      }
+
+      // If backend verification payload is supplied, route to backend verify endpoint
+      if (paymentInfo && typeof paymentInfo === 'object' && paymentInfo.razorpay_signature) {
+        const verifyRes = await fetch('http://localhost:5000/api/payments/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_payment_id: paymentInfo.razorpay_payment_id,
+            razorpay_order_id: paymentInfo.razorpay_order_id,
+            razorpay_signature: paymentInfo.razorpay_signature,
+            bookingDetails,
+          }),
+        })
+
+        if (!verifyRes.ok) {
+          const errData = await verifyRes.json()
+          throw new Error(errData.error || 'Payment verification failed')
+        }
+
+        const data = await verifyRes.json()
+        setBookingId(data.bookingId)
+        setConfirmed(true)
+        setStep(4)
+        toast.success('Payment verified & booking confirmed! 🎉')
+        return data.bookingId
+      }
+
+      // Fallback: Client-side write (used when bypassing gateway in dev/test keys)
+      const bid = 'FLT-' + Date.now().toString().slice(-6)
+      await addDoc(collection(db, 'bookings'), {
+        ...bookingDetails,
+        bookingId: bid,
         status: 'pending',
         paymentStatus: 'paid',
-        paymentId,
-        paymentMethod,
-        city: vehicle.city,
+        paymentId: typeof paymentInfo === 'string' ? paymentInfo : 'DEMO_' + Date.now(),
         createdAt: serverTimestamp(),
       })
 
-      // Mark vehicle temporarily unavailable until owner approves
       if (vehicle.id) {
         await updateDoc(doc(db, 'vehicles', vehicle.id), { available: false })
       }
@@ -86,37 +114,62 @@ export function useBooking() {
       return bid
     } catch (err) {
       console.error('Booking save error:', err)
-      toast.error('Booking failed. Please try again.')
+      toast.error(err.message || 'Booking failed. Please try again.')
       return null
     } finally {
       setSaving(false)
     }
   }
 
-  // Razorpay payment trigger
-  const initiateRazorpayPayment = (vehicle, pricing, onSuccess) => {
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: pricing.total * 100,
-      currency: 'INR',
-      name: 'Fleet',
-      description: `Booking: ${vehicle.name}`,
-      image: '/favicon.svg',
-      handler: async function (response) {
-        await onSuccess(response.razorpay_payment_id)
-      },
-      prefill: {
-        name: userDoc?.name || '',
-        email: user?.email || '',
-        contact: userDoc?.phone || '',
-      },
-      theme: { color: '#ff6b00' },
-      modal: {
-        ondismiss: () => toast('Payment cancelled', { icon: '⚠️' }),
-      },
+  // Razorpay payment trigger with backend order integration
+  const initiateRazorpayPayment = async (vehicle, pricing, onSuccess) => {
+    try {
+      // 1. Create secure order on Express backend
+      const res = await fetch('http://localhost:5000/api/payments/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: pricing.total }),
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to create payment order on backend')
+      }
+
+      const order = await res.json()
+
+      // 2. Configure checkout option with order_id
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Fleet',
+        description: `Booking: ${vehicle.name}`,
+        image: '/favicon.svg',
+        order_id: order.id,
+        handler: async function (response) {
+          // Pass the signature validation payload to success callback
+          await onSuccess({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          })
+        },
+        prefill: {
+          name: userDoc?.name || '',
+          email: user?.email || '',
+          contact: userDoc?.phone || '',
+        },
+        theme: { color: '#ff6b00' },
+        modal: {
+          ondismiss: () => toast('Payment cancelled', { icon: '⚠️' }),
+        },
+      }
+      const rzp = new window.Razorpay(options)
+      rzp.open()
+    } catch (err) {
+      console.error('Razorpay initialization error:', err)
+      toast.error('Payment initialization failed. Is the backend server running?')
     }
-    const rzp = new window.Razorpay(options)
-    rzp.open()
   }
 
   // Kept for backward compatibility
@@ -145,3 +198,4 @@ export function useBooking() {
     initiateRazorpayPayment,
   }
 }
+

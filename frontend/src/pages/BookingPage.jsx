@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
@@ -9,6 +9,7 @@ import { useBooking } from '../hooks/useBooking'
 import { ROUTES } from '@/lib/constants'
 import toast from 'react-hot-toast'
 import { sendNotification } from '../lib/notificationHelper'
+import { generateInvoice } from '../lib/invoiceGenerator'
 
 // ── Date/Time helpers ─────────────────────────────────────────────────────────
 function getNext60Days() {
@@ -244,8 +245,8 @@ export default function BookingPage() {
         })
       }
     } else {
-      initiateRazorpayPayment(vehicle, pricing, async (paymentId) => {
-        const bid = await saveBookingToFirestore(vehicle, pricing, paymentId)
+      initiateRazorpayPayment(vehicle, pricing, async (paymentRes) => {
+        const bid = await saveBookingToFirestore(vehicle, pricing, paymentRes)
         if (bid) {
           await sendNotification({
             userId: vehicle.ownerId,
@@ -296,6 +297,37 @@ export default function BookingPage() {
             >
               My Bookings
             </Link>
+            <button
+              onClick={async () => {
+                try {
+                  let bookingData = null
+                  const docSnap = await getDoc(doc(db, 'bookings', bookingId))
+                  if (docSnap.exists()) {
+                    bookingData = { id: docSnap.id, ...docSnap.data() }
+                  } else {
+                    const q = query(collection(db, 'bookings'), where('bookingId', '==', bookingId))
+                    const snap = await getDocs(q)
+                    if (!snap.empty) {
+                      bookingData = { id: snap.docs[0].id, ...snap.docs[0].data() }
+                    }
+                  }
+
+                  if (bookingData) {
+                    generateInvoice(bookingData, vehicle, user)
+                    toast.success('Invoice generated successfully!')
+                  } else {
+                    toast.error('Booking details not found yet.')
+                  }
+                } catch (err) {
+                  console.error(err)
+                  toast.error('Could not generate invoice. Try again.')
+                }
+              }}
+              className="inline-flex h-12 px-8 border border-outline-variant text-on-surface font-bold rounded-lg hover:bg-surface-container transition-all items-center gap-2"
+            >
+              <span>📄</span>
+              View Invoice
+            </button>
           </div>
         </div>
       </div>

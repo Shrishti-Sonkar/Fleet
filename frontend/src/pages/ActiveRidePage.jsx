@@ -78,7 +78,7 @@ export default function ActiveRidePage() {
     try {
       const vSnap = await getDoc(doc(db, 'vehicles', booking.vehicleId))
       const vehicleData = vSnap.exists() ? { id: vSnap.id, ...vSnap.data() } : null
-      generateInvoice(booking, vehicleData)
+      generateInvoice(booking, vehicleData, user)
     } catch (err) {
       console.error('Invoice download error:', err)
       toast.error('Failed to generate invoice. Please try again.')
