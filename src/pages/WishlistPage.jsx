@@ -7,6 +7,7 @@ import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import VehicleCard from '../components/sections/VehicleCard'
 import { Link } from 'react-router-dom'
+import { mockVehicles } from '../data/mockVehicles'
 
 export default function WishlistPage() {
   const { user } = useAuth()
@@ -48,6 +49,13 @@ export default function WishlistPage() {
               fetched.push({ id: doc.id, ...doc.data() })
             })
           }
+          
+          // Fallback to mock vehicles if not found in Firestore
+          const fetchedIds = fetched.map(v => v.id)
+          const stillMissing = missingIds.filter(id => !fetchedIds.includes(id))
+          const mockMatches = mockVehicles.filter(mv => stillMissing.includes(mv.id))
+          fetched.push(...mockMatches)
+
           setVehicles((prev) => {
             const currentFiltered = prev.filter((v) => wishlistIds.includes(v.id))
             return [...currentFiltered, ...fetched]

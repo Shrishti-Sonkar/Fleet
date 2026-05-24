@@ -305,90 +305,92 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* [DEV] Developer Console */}
-            <div className="p-5 border-2 border-dashed border-purple-300 bg-purple-50/50 rounded-2xl space-y-4">
-              <div className="flex items-center gap-2 text-purple-800">
-                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>build</span>
-                <span className="font-bold text-label-md">Developer Console</span>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Reset current user tokens */}
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateDoc(doc(db, 'users', user.uid), {
-                        tokens: 10,
-                        tokensUsed: 0,
-                        updatedAt: serverTimestamp()
-                      })
-                      await refreshUserDoc()
-                      toast.success('Your tokens have been reset to 10!')
-                    } catch (err) {
-                      toast.error('Failed to reset tokens: ' + err.message)
-                    }
-                  }}
-                  className="h-11 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-all flex items-center justify-center gap-2 text-label-md shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-                  Reset My Tokens (10)
-                </button>
+            {/* [DEV] Developer Console — Admin only */}
+            {isAdmin() && (
+              <div className="p-5 border-2 border-dashed border-purple-300 bg-purple-50/50 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 text-purple-800">
+                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>build</span>
+                  <span className="font-bold text-label-md">Developer Console</span>
+                </div>
 
-                {/* Migrate All Users */}
-                <button
-                  onClick={async () => {
-                    try {
-                      const querySnapshot = await getDocs(collection(db, 'users'))
-                      const batch = writeBatch(db)
-                      let count = 0
-                      
-                      querySnapshot.forEach((docSnap) => {
-                        const data = docSnap.data()
-                        if (data.tokens === undefined) {
-                          batch.update(docSnap.ref, {
-                            tokens: 10,
-                            tokensUsed: 0
-                          })
-                          count++
-                        }
-                      })
-                      
-                      if (count > 0) {
-                        await batch.commit()
-                        toast.success(`Successfully migrated ${count} users!`)
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Reset current user tokens */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateDoc(doc(db, 'users', user.uid), {
+                          tokens: 10,
+                          tokensUsed: 0,
+                          updatedAt: serverTimestamp()
+                        })
                         await refreshUserDoc()
-                      } else {
-                        toast.success('All existing users already have tokens.')
+                        toast.success('Your tokens have been reset to 10!')
+                      } catch (err) {
+                        toast.error('Failed to reset tokens: ' + err.message)
                       }
-                    } catch (err) {
-                      toast.error('Migration failed: ' + err.message)
-                    }
-                  }}
-                  className="h-11 bg-white text-purple-700 font-bold border border-purple-300 rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center gap-2 text-label-md shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-[18px]">database</span>
-                  Migrate All Users
-                </button>
-              </div>
+                    }}
+                    className="h-11 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-all flex items-center justify-center gap-2 text-label-md shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+                    Reset My Tokens (10)
+                  </button>
 
-              {userDoc?.role !== 'admin' && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateDoc(doc(db, 'users', user.uid), { role: 'admin' })
-                      await refreshUserDoc()
-                      toast.success('You are now an Admin! Enjoy dev features.')
-                    } catch (err) {
-                      toast.error('Failed to make admin: ' + err.message)
-                    }
-                  }}
-                  className="w-full h-11 bg-purple-100 text-purple-800 font-bold rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2 text-label-md border border-purple-200"
-                >
-                  <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                  Make Me Admin
-                </button>
-              )}
-            </div>
+                  {/* Migrate All Users */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        const querySnapshot = await getDocs(collection(db, 'users'))
+                        const batch = writeBatch(db)
+                        let count = 0
+
+                        querySnapshot.forEach((docSnap) => {
+                          const data = docSnap.data()
+                          if (data.tokens === undefined) {
+                            batch.update(docSnap.ref, {
+                              tokens: 10,
+                              tokensUsed: 0
+                            })
+                            count++
+                          }
+                        })
+
+                        if (count > 0) {
+                          await batch.commit()
+                          toast.success(`Successfully migrated ${count} users!`)
+                          await refreshUserDoc()
+                        } else {
+                          toast.success('All existing users already have tokens.')
+                        }
+                      } catch (err) {
+                        toast.error('Migration failed: ' + err.message)
+                      }
+                    }}
+                    className="h-11 bg-white text-purple-700 font-bold border border-purple-300 rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center gap-2 text-label-md shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">database</span>
+                    Migrate All Users
+                  </button>
+                </div>
+
+                {userDoc?.role !== 'admin' && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateDoc(doc(db, 'users', user.uid), { role: 'admin' })
+                        await refreshUserDoc()
+                        toast.success('You are now an Admin! Enjoy dev features.')
+                      } catch (err) {
+                        toast.error('Failed to make admin: ' + err.message)
+                      }
+                    }}
+                    className="w-full h-11 bg-purple-100 text-purple-800 font-bold rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2 text-label-md border border-purple-200"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                    Make Me Admin
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Logout */}
             <button

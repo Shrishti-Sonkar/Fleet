@@ -10,11 +10,16 @@ const engineFilters = ['100cc+', '350cc+', '500cc+']
 const vehicleTypes = ['Cruiser', 'Adventure Tourer', 'Sports Bike']
 
 export default function BrowsePage() {
-  const { vehicles, filter, setFilter, sort, setSort } = useVehicles()
+  const { vehicles, filter, setFilter, sort, setSort, setSearchCity } = useVehicles()
   const [priceRange, setPriceRange] = useState(2000)
   const [activeEngine, setActiveEngine] = useState('100cc+')
   const [checkedTypes, setCheckedTypes] = useState(['Cruiser'])
   const [locationQuery, setLocationQuery] = useState('')
+
+  const handleLocationChange = (val) => {
+    setLocationQuery(val)
+    setSearchCity(val)
+  }
 
   const toggleType = (t) => {
     setCheckedTypes(prev =>
@@ -44,7 +49,7 @@ export default function BrowsePage() {
                       placeholder="Search Dehradun..."
                       type="text"
                       value={locationQuery}
-                      onChange={e => setLocationQuery(e.target.value)}
+                      onChange={e => handleLocationChange(e.target.value)}
                     />
                   </div>
                 </div>

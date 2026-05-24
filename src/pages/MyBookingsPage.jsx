@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
 import { Link, useNavigate } from 'react-router-dom'
 import StartRideModal from '../components/StartRideModal'
+import CancelRideModal from '../components/CancelRideModal'
 
 const statusConfig = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: 'pending' },
@@ -21,6 +22,7 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [startRideBooking, setStartRideBooking] = useState(null)
+  const [cancelBooking, setCancelBooking] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -146,12 +148,12 @@ export default function MyBookingsPage() {
                           <button className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium text-secondary cursor-not-allowed opacity-60">
                             Awaiting Approval...
                           </button>
-                          <Link
-                            to="/my-bookings"
-                            className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold flex items-center justify-center hover:bg-red-50 transition-all"
+                          <button
+                            onClick={() => setCancelBooking(b)}
+                            className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold hover:bg-red-50 transition-all"
                           >
                             Cancel
-                          </Link>
+                          </button>
                         </>
                       )}
 
@@ -164,7 +166,10 @@ export default function MyBookingsPage() {
                             <span className="material-symbols-outlined text-[16px]">directions_car</span>
                             Start Ride →
                           </button>
-                          <button className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold hover:bg-red-50 transition-all">
+                          <button
+                            onClick={() => setCancelBooking(b)}
+                            className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold hover:bg-red-50 transition-all"
+                          >
                             Cancel
                           </button>
                         </>
@@ -222,6 +227,14 @@ export default function MyBookingsPage() {
         <StartRideModal
           booking={startRideBooking}
           onClose={() => setStartRideBooking(null)}
+        />
+      )}
+
+      {/* CancelRideModal */}
+      {cancelBooking && (
+        <CancelRideModal
+          booking={cancelBooking}
+          onClose={() => setCancelBooking(null)}
         />
       )}
     </PageLayout>

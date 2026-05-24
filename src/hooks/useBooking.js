@@ -30,6 +30,13 @@ export function useBooking() {
     setSaving(true)
     try {
       const bid = 'FLT-' + Date.now().toString().slice(-6)
+
+      // Use passed pricing fields (Batch 4 BookingPage passes full object)
+      const pDate = pricing.pickupDate || pickupDate
+      const dDate = pricing.dropoffDate || dropoffDate
+      const pTime = pricing.pickupTime || '10:00'
+      const dTime = pricing.dropoffTime || '10:00'
+
       await addDoc(collection(db, 'bookings'), {
         bookingId: bid,
         renterId: user.uid,
@@ -38,16 +45,24 @@ export function useBooking() {
         vehicleId: vehicle.id,
         vehicleName: vehicle.name,
         vehicleImage: vehicle.imageUrl || vehicle.images?.[0] || '',
-        ownerId: vehicle.ownerId || 'OWNER_UID',
-        pickupDate,
-        dropoffDate,
-        totalDays: pricing.days,
+        ownerId: vehicle.ownerId || '',
+        pickupDate: pDate,
+        dropoffDate: dDate,
+        pickupTime: pTime,
+        dropoffTime: dTime,
+        pickupLocation: pricing.pickupLocation || vehicle.location || '',
+        rentalType: pricing.rentalType || 'daily',
+        totalDays: pricing.days || 1,
+        totalHours: pricing.hours || 0,
         pricing: {
           dailyRate: vehicle.dailyPrice,
           rentalCharge: pricing.rentalCharge,
-          insurance: pricing.insurance,
+          insurance: pricing.insurance || 0,
+          couponCode: pricing.couponCode || null,
+          couponSavings: pricing.couponSavings || 0,
           gst: pricing.gst,
           total: pricing.total,
+          subtotal: pricing.subtotal || pricing.rentalCharge,
           securityDeposit: vehicle.securityDeposit || 5000,
         },
         addons,
