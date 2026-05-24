@@ -6,7 +6,12 @@ import HowItWorks from '../components/sections/HowItWorks'
 import PopularVehicles from '../components/sections/PopularVehicles'
 import PromoBanner from '../components/sections/PromoBanner'
 import ActiveBookingCard from '../components/sections/ActiveBookingCard'
-import { mockCities } from '../data/mockVehicles'
+// City data for the "Explore Uttarakhand" section (static marketing content)
+const cities = [
+  { name: 'Dehradun', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCG6to6WAn9nAbhAK_3L2T7qhfF-unT40KqAxKGdaZoZ9RK2CWkF4SS0qA4bJLlKRRrSjh1jqb4I7fobdKvDPaNWF3VXGu-tl0W0tqBubkquJ9Z5z5ptS7NOGgm5w7mmp2m1CPgQ_xg5w9bT7BGjhtHCK4oV_mPInmevNZ3srGNRnt7-HGnphHi_CmOy2Q4ZKzhJDhtEYoLvqUKryqJQI2l5nhz91Jm30ioKZLnEs1ynTYFQBSjU2JSoXpmcaFozjb2UFMz1Ehy5Vuv' },
+  { name: 'Mussoorie', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD3OFTL5CbieSDMcI8qUCCWLludJgl8fRqjpzmuaIKM7dTeTFxaQ0Jk6U8mGQrsznB1YfFYaF65vbWP712qy7o4aRRNfnToxzqpfJDDIDFMSh4hd9nr2fcNJ76tOJ5mWtNwY7I706QYQeQFv45clsOg1K1FrmxgjXmeW0cp_InDmIQm2vQheHIawEtR5sC7c3iVXq_fYwx3dkgocsMhIdp7qahTHQqJjAC2wFAJUiRzSj4WZdVe-PCeBEJBJ5iFsu4P0prCzarb13u7' },
+  { name: 'Rishikesh', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAKCiztFRUTSZTCVo5lXdNKLEdiOcT9aQX6NUaQh4ykA0U7kj8UmfuO6wgDJSAUSjkKxqemm3cCczmeZsqTNnj-BfGxLNFGxLNFCp41Rxn9tmwJ5vQCoxgiv3O_YRZlQWyzvu6Cuz4F7fTZOTepVrsmyOul8qjJ2HN8aXZnFo2-yhn6q1mqSH1NjDUy2gkzDH2ckvk0MwqXw5m4o5t3Rk_G6ovjhpGSPZ7EZmBMO513cnYEYSoCW_Mh1GzUOYi-zD4HwaJ8oG2Rmj7tYR58X' },
+]
 import { useVehicles } from '../hooks/useVehicles'
 import { ROUTES } from '@/lib/constants'
 import HeroSection from '@/components/sections/HeroSection'
@@ -48,7 +53,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-gutter">
-            {mockCities.map(city => (
+            {cities.map(city => (
               <div key={city.name} className="relative h-[400px] rounded-2xl overflow-hidden group">
                 <img
                   alt={city.name}
@@ -58,7 +63,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-[#111111] via-transparent to-transparent" />
                 <div className="absolute bottom-6 left-6">
                   <h3 className="font-headline-sm text-headline-sm mb-1">{city.name}</h3>
-                  <p className="text-white/60 text-label-md">{city.vehicleCount}+ Vehicles Available</p>
+                  <p className="text-white/60 text-label-md">Vehicles Available</p>
                 </div>
               </div>
             ))}

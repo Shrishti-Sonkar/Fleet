@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider,
   signOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
   RecaptchaVerifier,
   signInWithPhoneNumber,
   setPersistence,
@@ -74,13 +75,17 @@ export function AuthProvider({ children }) {
     setUserDoc(uDoc)
   }
 
-  const signup = async (email, password, name, phone) => {
+  const signup = async (email, password, name, phone, phoneVerified = false) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
+    // Send email verification link
+    await sendEmailVerification(cred.user)
     await setDoc(doc(db, 'users', cred.user.uid), {
       uid: cred.user.uid,
       name,
       email,
       phone: phone || '',
+      phoneVerified,
+      emailVerified: false,
       // role is NOT set here — set on RoleSelectionPage
       kycStatus: 'not_submitted',
       isVerified: false,

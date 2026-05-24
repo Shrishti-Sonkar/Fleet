@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { doc, getDoc } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth'
+import { auth, db } from '../lib/firebase'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -54,6 +55,7 @@ export default function LoginPage() {
   }, [otpTimer])
 
   // ── Sign-Up state (dedicated — no collision with sign-in) ─────────────────
+  const [signupStep, setSignupStep]       = useState(1) // 1 = form, 2 = phone OTP verify
   const [signupName, setSignupName]       = useState('')
   const [signupEmail, setSignupEmail]     = useState('')
   const [signupPhone, setSignupPhone]     = useState('')
@@ -65,6 +67,21 @@ export default function LoginPage() {
   const [signupLoading, setSignupLoading] = useState(false)
   const [signupError, setSignupError]     = useState('')
   const [showSuccess, setShowSuccess]     = useState(false)
+
+  // ── Sign-Up OTP state (separate from sign-in OTP) ─────────────────────────
+  const [signupOtp, setSignupOtp]               = useState(['', '', '', '', '', ''])
+  const [signupOtpSent, setSignupOtpSent]       = useState(false)
+  const [signupOtpTimer, setSignupOtpTimer]     = useState(0)
+  const [signupSendingOtp, setSignupSendingOtp] = useState(false)
+  const [signupVerifyingOtp, setSignupVerifyingOtp] = useState(false)
+  const signupOtpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()]
+
+  // Signup OTP countdown
+  useEffect(() => {
+    if (signupOtpTimer <= 0) return
+    const id = setInterval(() => setSignupOtpTimer(t => t - 1), 1000)
+    return () => clearInterval(id)
+  }, [signupOtpTimer])
 
   // ── Password strength helper ───────────────────────────────────────────────
   const pwdStrength = (pwd) => {
@@ -173,7 +190,8 @@ export default function LoginPage() {
     }
   }
 
-  // ── Handlers — Sign Up ────────────────────────────────────────────────────
+  // ── Handlers — Sign Up (Multi-Step) ─────────────────────────────────────────
+
   const validateSignup = () => {
     if (!signupName.trim() || signupName.trim().length < 2)
       return 'Enter your full name (min 2 characters)'
@@ -190,7 +208,8 @@ export default function LoginPage() {
     return null
   }
 
-  const handleSignUp = async (e) => {
+  // Step 1: Validate form → Send OTP to phone number
+  const handleSignUpStep1 = async (e) => {
     e.preventDefault()
     const err = validateSignup()
     if (err) {
@@ -198,23 +217,151 @@ export default function LoginPage() {
       toast.error(err)
       return
     }
-    setSignupLoading(true)
     setSignupError('')
+    setSignupSendingOtp(true)
     try {
-      await signup(signupEmail, signupPassword, signupName.trim(), '+91' + signupPhone.replace(/\D/g, ''))
-      toast.success('Account created! Welcome to Fleet 🎉')
-      setShowSuccess(true)
+      const cleaned = signupPhone.replace(/\D/g, '')
+      // Clean up any stale verifier
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear()
+        window.recaptchaVerifier = null
+      }
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container-signup',
+        {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            window.recaptchaVerifier = null
+          },
+        }
+      )
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        '+91' + cleaned,
+        window.recaptchaVerifier
+      )
+      window.signupConfirmationResult = confirmationResult
+      setSignupOtpSent(true)
+      setSignupOtpTimer(30)
+      setSignupStep(2)
+      toast.success('OTP sent to +91 ' + cleaned)
     } catch (err) {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear()
+        window.recaptchaVerifier = null
+      }
       const msg =
-        err.code === 'auth/email-already-in-use'
-          ? 'This email is already registered. Please sign in.'
-          : err.code === 'auth/weak-password'
-          ? 'Password is too weak. Use 8+ characters.'
-          : 'Signup failed. Please try again.'
+        err.code === 'auth/invalid-phone-number'
+          ? 'Invalid phone number'
+          : err.code === 'auth/too-many-requests'
+          ? 'Too many attempts. Try after some time.'
+          : 'Failed to send OTP. Try again.'
       setSignupError(msg)
       toast.error(msg)
     } finally {
-      setSignupLoading(false)
+      setSignupSendingOtp(false)
+    }
+  }
+
+  // Resend OTP for signup
+  const handleSignupResendOtp = async () => {
+    setSignupSendingOtp(true)
+    try {
+      const cleaned = signupPhone.replace(/\D/g, '')
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear()
+        window.recaptchaVerifier = null
+      }
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container-signup',
+        {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            window.recaptchaVerifier = null
+          },
+        }
+      )
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        '+91' + cleaned,
+        window.recaptchaVerifier
+      )
+      window.signupConfirmationResult = confirmationResult
+      setSignupOtpTimer(30)
+      toast.success('OTP resent!')
+    } catch {
+      toast.error('Failed to resend OTP. Try again.')
+    } finally {
+      setSignupSendingOtp(false)
+    }
+  }
+
+  // OTP input helpers for signup
+  const handleSignupOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return
+    const next = [...signupOtp]
+    next[index] = value.slice(-1)
+    setSignupOtp(next)
+    if (value && index < 5) signupOtpRefs[index + 1].current?.focus()
+  }
+
+  const handleSignupOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !signupOtp[index] && index > 0) {
+      signupOtpRefs[index - 1].current?.focus()
+    }
+  }
+
+  // Step 2: Verify OTP → Then create the actual email/password account
+  const handleSignUpStep2 = async () => {
+    const otpString = signupOtp.join('')
+    if (otpString.length !== 6) {
+      toast.error('Enter complete 6-digit OTP')
+      return
+    }
+    setSignupVerifyingOtp(true)
+    setSignupError('')
+    try {
+      // Verify the phone OTP (this signs in with a temporary phone auth session)
+      if (!window.signupConfirmationResult) {
+        throw new Error('No OTP sent. Please go back and try again.')
+      }
+      await window.signupConfirmationResult.confirm(otpString)
+
+      // Phone verified! Now sign out the temporary phone-auth user
+      // and create the real email/password account
+      await signOut(auth)
+
+      // Create the actual account with email/password + save to Firestore
+      const cleaned = signupPhone.replace(/\D/g, '')
+      await signup(signupEmail, signupPassword, signupName.trim(), '+91' + cleaned, true)
+
+      toast.success('Account created & phone verified! Welcome to Fleet 🎉')
+      toast('📧 Check your email for verification link', { duration: 6000 })
+      setShowSuccess(true)
+    } catch (err) {
+      if (err.code === 'auth/invalid-verification-code') {
+        toast.error('Wrong OTP. Please check and retry.')
+        setSignupOtp(['', '', '', '', '', ''])
+        signupOtpRefs[0].current?.focus()
+      } else if (err.code === 'auth/email-already-in-use') {
+        setSignupError('This email is already registered. Please sign in.')
+        toast.error('This email is already registered. Please sign in.')
+        setSignupStep(1)
+      } else if (err.code === 'auth/weak-password') {
+        setSignupError('Password is too weak. Use 8+ characters.')
+        toast.error('Password is too weak.')
+        setSignupStep(1)
+      } else {
+        const msg = err.message || 'Signup failed. Please try again.'
+        setSignupError(msg)
+        toast.error(msg)
+      }
+    } finally {
+      setSignupVerifyingOtp(false)
     }
   }
 
@@ -565,221 +712,306 @@ export default function LoginPage() {
               <div>
                 <h2 className="text-headline-lg-mobile font-bold text-on-surface">Create account</h2>
                 <p className="text-secondary mt-1 text-body-md">Join India's most premium vehicle rental community.</p>
+                {/* Step indicator */}
+                <div className="flex items-center gap-3 mt-4">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-label-md font-bold transition-all ${signupStep >= 1 ? 'bg-primary-container text-white' : 'bg-surface-container text-secondary'}`}>1</div>
+                  <div className={`flex-1 h-1 rounded-full transition-all ${signupStep >= 2 ? 'bg-primary-container' : 'bg-surface-container'}`} />
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-label-md font-bold transition-all ${signupStep >= 2 ? 'bg-primary-container text-white' : 'bg-surface-container text-secondary'}`}>2</div>
+                </div>
+                <p className="text-label-sm text-secondary mt-2">
+                  {signupStep === 1 ? 'Step 1: Fill in your details' : 'Step 2: Verify your phone number'}
+                </p>
               </div>
 
-              <form className="space-y-4" onSubmit={handleSignUp}>
-                {/* Error banner */}
-                {signupError && (
-                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">
-                    <span className="material-symbols-outlined text-error text-[18px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      error
-                    </span>
-                    <p className="text-label-md text-error">{signupError}</p>
-                  </div>
-                )}
-
-                {/* Full Name */}
-                <div>
-                  <label className="block text-label-md font-medium text-secondary mb-1.5">Full Name *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">person</span>
-                    <input
-                      id="signup-name"
-                      type="text"
-                      value={signupName}
-                      onChange={e => setSignupName(e.target.value)}
-                      placeholder="Rahul Sharma"
-                      className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-label-md font-medium text-secondary mb-1.5">Email Address *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">mail</span>
-                    <input
-                      id="signup-email"
-                      type="email"
-                      value={signupEmail}
-                      onChange={e => setSignupEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Mobile Number */}
-                <div>
-                  <label className="block text-label-md font-medium text-secondary mb-1.5">Mobile Number *</label>
-                  <div className="flex h-12 border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-container">
-                    <div className="flex items-center px-4 bg-surface-container border-r border-outline-variant shrink-0">
-                      <span className="text-label-md font-bold">🇮🇳 +91</span>
-                    </div>
-                    <input
-                      id="signup-phone"
-                      type="tel"
-                      value={signupPhone}
-                      onChange={e => setSignupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="9876543210"
-                      className="flex-1 px-4 bg-transparent outline-none text-body-lg"
-                      maxLength={10}
-                    />
-                  </div>
-                  <p className="text-label-sm text-secondary mt-1">Used for booking confirmations &amp; OTP</p>
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label className="block text-label-md font-medium text-secondary mb-1.5">Password *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock</span>
-                    <input
-                      id="signup-password"
-                      type={showSignupPwd ? 'text' : 'password'}
-                      value={signupPassword}
-                      onChange={e => setSignupPassword(e.target.value)}
-                      placeholder="Min 8 characters"
-                      className="w-full h-12 pl-11 pr-12 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSignupPwd(v => !v)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {showSignupPwd ? 'visibility_off' : 'visibility'}
+              {/* ── STEP 1: REGISTRATION FORM ── */}
+              {signupStep === 1 && (
+                <form className="space-y-4" onSubmit={handleSignUpStep1}>
+                  {/* Error banner */}
+                  {signupError && (
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">
+                      <span className="material-symbols-outlined text-error text-[18px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        error
                       </span>
-                    </button>
-                  </div>
-                  {/* Strength indicator */}
-                  {signupPassword && (
-                    <div className="flex items-center gap-1 mt-2">
-                      {[1, 2, 3, 4].map(level => (
-                        <div
-                          key={level}
-                          className={`h-1 flex-1 rounded-full transition-all ${
-                            strength.level >= level
-                              ? level === 1 ? 'bg-red-400'
-                              : level === 2 ? 'bg-yellow-400'
-                              : level === 3 ? 'bg-blue-400'
-                              : 'bg-green-500'
-                              : 'bg-surface-container-high'
-                          }`}
-                        />
-                      ))}
-                      <span className="text-label-sm text-secondary ml-2 shrink-0">{strength.label}</span>
+                      <p className="text-label-md text-error">{signupError}</p>
                     </div>
                   )}
-                </div>
 
-                {/* Confirm Password */}
-                <div>
-                  <label className="block text-label-md font-medium text-secondary mb-1.5">Confirm Password *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock_clock</span>
-                    <input
-                      id="signup-confirm"
-                      type={showConfirm ? 'text' : 'password'}
-                      value={signupConfirm}
-                      onChange={e => setSignupConfirm(e.target.value)}
-                      placeholder="Repeat your password"
-                      className={`w-full h-12 pl-11 pr-12 border rounded-xl bg-surface focus:ring-2 outline-none text-body-lg transition-all ${
-                        signupConfirm && signupPassword !== signupConfirm
-                          ? 'border-error focus:ring-red-200'
-                          : signupConfirm && signupPassword === signupConfirm
-                          ? 'border-green-500 focus:ring-green-200'
-                          : 'border-outline-variant focus:ring-primary-container'
-                      }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirm(v => !v)}
-                      className="absolute right-10 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        {showConfirm ? 'visibility_off' : 'visibility'}
-                      </span>
-                    </button>
-                    {/* Match icon */}
-                    {signupConfirm && (
-                      <span
-                        className={`absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-[20px] ${
-                          signupPassword === signupConfirm ? 'text-green-500' : 'text-error'
-                        }`}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-label-md font-medium text-secondary mb-1.5">Full Name *</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">person</span>
+                      <input
+                        id="signup-name"
+                        type="text"
+                        value={signupName}
+                        onChange={e => setSignupName(e.target.value)}
+                        placeholder="Rahul Sharma"
+                        className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-label-md font-medium text-secondary mb-1.5">Email Address *</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">mail</span>
+                      <input
+                        id="signup-email"
+                        type="email"
+                        value={signupEmail}
+                        onChange={e => setSignupEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div>
+                    <label className="block text-label-md font-medium text-secondary mb-1.5">Mobile Number *</label>
+                    <div className="flex h-12 border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-container">
+                      <div className="flex items-center px-4 bg-surface-container border-r border-outline-variant shrink-0">
+                        <span className="text-label-md font-bold">🇮🇳 +91</span>
+                      </div>
+                      <input
+                        id="signup-phone"
+                        type="tel"
+                        value={signupPhone}
+                        onChange={e => setSignupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="9876543210"
+                        className="flex-1 px-4 bg-transparent outline-none text-body-lg"
+                        maxLength={10}
+                      />
+                    </div>
+                    <p className="text-label-sm text-secondary mt-1">An OTP will be sent to verify this number</p>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-label-md font-medium text-secondary mb-1.5">Password *</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock</span>
+                      <input
+                        id="signup-password"
+                        type={showSignupPwd ? 'text' : 'password'}
+                        value={signupPassword}
+                        onChange={e => setSignupPassword(e.target.value)}
+                        placeholder="Min 8 characters"
+                        className="w-full h-12 pl-11 pr-12 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupPwd(v => !v)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
                       >
-                        {signupPassword === signupConfirm ? 'check_circle' : 'cancel'}
-                      </span>
+                        <span className="material-symbols-outlined text-[20px]">
+                          {showSignupPwd ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                    {/* Strength indicator */}
+                    {signupPassword && (
+                      <div className="flex items-center gap-1 mt-2">
+                        {[1, 2, 3, 4].map(level => (
+                          <div
+                            key={level}
+                            className={`h-1 flex-1 rounded-full transition-all ${
+                              strength.level >= level
+                                ? level === 1 ? 'bg-red-400'
+                                : level === 2 ? 'bg-yellow-400'
+                                : level === 3 ? 'bg-blue-400'
+                                : 'bg-green-500'
+                                : 'bg-surface-container-high'
+                            }`}
+                          />
+                        ))}
+                        <span className="text-label-sm text-secondary ml-2 shrink-0">{strength.label}</span>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Terms & Conditions */}
-                <div className="flex items-start gap-3 py-1">
+                  {/* Confirm Password */}
+                  <div>
+                    <label className="block text-label-md font-medium text-secondary mb-1.5">Confirm Password *</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock_clock</span>
+                      <input
+                        id="signup-confirm"
+                        type={showConfirm ? 'text' : 'password'}
+                        value={signupConfirm}
+                        onChange={e => setSignupConfirm(e.target.value)}
+                        placeholder="Repeat your password"
+                        className={`w-full h-12 pl-11 pr-12 border rounded-xl bg-surface focus:ring-2 outline-none text-body-lg transition-all ${
+                          signupConfirm && signupPassword !== signupConfirm
+                            ? 'border-error focus:ring-red-200'
+                            : signupConfirm && signupPassword === signupConfirm
+                            ? 'border-green-500 focus:ring-green-200'
+                            : 'border-outline-variant focus:ring-primary-container'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirm(v => !v)}
+                        className="absolute right-10 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {showConfirm ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                      {/* Match icon */}
+                      {signupConfirm && (
+                        <span
+                          className={`absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-[20px] ${
+                            signupPassword === signupConfirm ? 'text-green-500' : 'text-error'
+                          }`}
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                          {signupPassword === signupConfirm ? 'check_circle' : 'cancel'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Terms & Conditions */}
+                  <div className="flex items-start gap-3 py-1">
+                    <button
+                      type="button"
+                      onClick={() => setAgreeTerms(v => !v)}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                        agreeTerms
+                          ? 'bg-primary-container border-primary-container'
+                          : 'border-outline-variant bg-surface'
+                      }`}
+                    >
+                      {agreeTerms && (
+                        <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          check
+                        </span>
+                      )}
+                    </button>
+                    <p className="text-label-md text-secondary leading-relaxed">
+                      I agree to Fleet's{' '}
+                      <a href="/terms" target="_blank" className="text-primary font-bold hover:underline">Terms &amp; Conditions</a>
+                      {' '}and{' '}
+                      <a href="/privacy" target="_blank" className="text-primary font-bold hover:underline">Privacy Policy</a>.
+                      {' '}I confirm I'm 18+ and hold a valid driving license.
+                    </p>
+                  </div>
+
+                  {/* Submit — sends OTP */}
+                  <button
+                    type="submit"
+                    id="signup-btn"
+                    disabled={signupSendingOtp || !agreeTerms}
+                    className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                  >
+                    {signupSendingOtp ? 'Sending OTP...' : 'Verify Phone & Continue →'}
+                  </button>
+
+                  {/* Divider */}
+                  <div className="relative flex items-center gap-4">
+                    <div className="flex-grow h-px bg-outline-variant" />
+                    <span className="text-label-md text-secondary">or sign up with</span>
+                    <div className="flex-grow h-px bg-outline-variant" />
+                  </div>
+
+                  {/* Google signup */}
                   <button
                     type="button"
-                    onClick={() => setAgreeTerms(v => !v)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
-                      agreeTerms
-                        ? 'bg-primary-container border-primary-container'
-                        : 'border-outline-variant bg-surface'
-                    }`}
+                    onClick={handleGoogle}
+                    className="w-full h-12 border-2 border-outline-variant rounded-full font-bold flex items-center justify-center gap-3 hover:border-primary-container hover:bg-primary-fixed transition-all"
                   >
-                    {agreeTerms && (
-                      <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        check
-                      </span>
-                    )}
+                    <img
+                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU"
+                      alt=""
+                      className="w-5 h-5"
+                    />
+                    Continue with Google
                   </button>
-                  <p className="text-label-md text-secondary leading-relaxed">
-                    I agree to Fleet's{' '}
-                    <a href="/terms" target="_blank" className="text-primary font-bold hover:underline">Terms &amp; Conditions</a>
-                    {' '}and{' '}
-                    <a href="/privacy" target="_blank" className="text-primary font-bold hover:underline">Privacy Policy</a>.
-                    {' '}I confirm I'm 18+ and hold a valid driving license.
+                  <p className="text-center text-label-sm text-secondary">
+                    Google sign-up auto-accepts our Terms &amp; Conditions
                   </p>
+                </form>
+              )}
+
+              {/* ── STEP 2: PHONE OTP VERIFICATION ── */}
+              {signupStep === 2 && (
+                <div className="space-y-5">
+                  {/* Error banner */}
+                  {signupError && (
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">
+                      <span className="material-symbols-outlined text-error text-[18px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        error
+                      </span>
+                      <p className="text-label-md text-error">{signupError}</p>
+                    </div>
+                  )}
+
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="material-symbols-outlined text-primary-container text-3xl">phone_android</span>
+                    </div>
+                    <p className="text-body-lg text-on-surface font-medium">Verify your phone number</p>
+                    <p className="text-primary font-bold text-body-lg">+91 {signupPhone}</p>
+                    <button
+                      onClick={() => { setSignupStep(1); setSignupOtpSent(false); setSignupOtp(['', '', '', '', '', '']); setSignupError('') }}
+                      className="text-label-md text-secondary underline mt-1 hover:text-primary transition-colors"
+                    >
+                      ← Go back & edit details
+                    </button>
+                  </div>
+
+                  {/* 6-digit OTP boxes */}
+                  <div className="flex gap-3 justify-center my-4">
+                    {signupOtp.map((digit, i) => (
+                      <input
+                        key={i}
+                        ref={signupOtpRefs[i]}
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={e => handleSignupOtpChange(i, e.target.value)}
+                        onKeyDown={e => handleSignupOtpKeyDown(i, e)}
+                        className={`w-11 h-14 text-center text-[22px] font-bold border-2 rounded-xl outline-none transition-all ${
+                          digit
+                            ? 'border-primary-container bg-primary-fixed text-on-primary-fixed'
+                            : 'border-outline-variant bg-surface'
+                        } focus:border-primary-container focus:ring-2 focus:ring-primary-fixed`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Resend timer */}
+                  <p className="text-center text-label-md text-secondary">
+                    {signupOtpTimer > 0 ? (
+                      <>Resend OTP in <span className="font-bold text-primary">{signupOtpTimer}s</span></>
+                    ) : (
+                      <button onClick={handleSignupResendOtp} disabled={signupSendingOtp} className="text-primary font-bold underline">
+                        {signupSendingOtp ? 'Sending...' : 'Resend OTP'}
+                      </button>
+                    )}
+                  </p>
+
+                  <button
+                    id="signup-verify-otp-btn"
+                    onClick={handleSignUpStep2}
+                    disabled={signupVerifyingOtp || signupOtp.join('').length !== 6}
+                    className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                  >
+                    {signupVerifyingOtp ? 'Verifying & Creating Account...' : 'Verify & Create Account ✓'}
+                  </button>
                 </div>
+              )}
 
-                {/* Submit */}
-                <button
-                  type="submit"
-                  id="signup-btn"
-                  disabled={signupLoading || !agreeTerms}
-                  className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
-                >
-                  {signupLoading ? 'Creating Account...' : 'Create Account →'}
-                </button>
-
-                {/* Divider */}
-                <div className="relative flex items-center gap-4">
-                  <div className="flex-grow h-px bg-outline-variant" />
-                  <span className="text-label-md text-secondary">or sign up with</span>
-                  <div className="flex-grow h-px bg-outline-variant" />
-                </div>
-
-                {/* Google signup */}
-                <button
-                  type="button"
-                  onClick={handleGoogle}
-                  className="w-full h-12 border-2 border-outline-variant rounded-full font-bold flex items-center justify-center gap-3 hover:border-primary-container hover:bg-primary-fixed transition-all"
-                >
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU"
-                    alt=""
-                    className="w-5 h-5"
-                  />
-                  Continue with Google
-                </button>
-                <p className="text-center text-label-sm text-secondary">
-                  Google sign-up auto-accepts our Terms &amp; Conditions
-                </p>
-              </form>
+              {/* Recaptcha container for signup */}
+              <div id="recaptcha-container-signup" />
 
               <p className="text-center text-label-md text-secondary">
                 Already have an account?{' '}
-                <button onClick={() => setActiveTab('signin')} className="text-primary font-bold hover:underline">
+                <button onClick={() => { setActiveTab('signin'); setSignupStep(1) }} className="text-primary font-bold hover:underline">
                   Sign In
                 </button>
               </p>
