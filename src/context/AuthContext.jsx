@@ -45,15 +45,24 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const uDoc = await fetchAndMigrateUserDoc(firebaseUser.uid)
-        setUserDoc(uDoc)
-        setUser(firebaseUser)
-      } else {
-        setUser(null)
-        setUserDoc(null)
+      try {
+        if (firebaseUser) {
+          const uDoc = await fetchAndMigrateUserDoc(firebaseUser.uid)
+          setUserDoc(uDoc)
+          setUser(firebaseUser)
+        } else {
+          setUser(null)
+          setUserDoc(null)
+        }
+      } catch (err) {
+        console.error('Error in onAuthStateChanged auth listener:', err)
+        // Fallback: still authenticate user even if userDoc retrieval fails
+        if (firebaseUser) {
+          setUser(firebaseUser)
+        }
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     })
     return unsub
   }, [])

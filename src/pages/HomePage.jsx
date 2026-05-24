@@ -1,5 +1,6 @@
 import PageLayout from '@/components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
+import { Link } from 'react-router-dom'
 
 import HowItWorks from '../components/sections/HowItWorks'
 import PopularVehicles from '../components/sections/PopularVehicles'

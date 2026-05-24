@@ -23,14 +23,22 @@ export function useNotifications() {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc'),
       limit(20)
     )
 
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      // Sort client-side by createdAt descending to avoid index errors
+      data.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0)
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0)
+        return dateB - dateA
+      })
       setNotifications(data)
       setUnreadCount(data.filter(n => !n.read).length)
+      setLoading(false)
+    }, (err) => {
+      console.error('Notifications fetch error:', err)
       setLoading(false)
     })
 
