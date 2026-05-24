@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useAuth } from '../../context/AuthContext'
 
 const TYPE_CONFIG = {
   booking_approved: { icon: 'check_circle',      color: 'text-green-500'  },
-  booking_cancelled:{ icon: 'cancel',             color: 'text-red-500'    },
-  kyc_approved:     { icon: 'verified_user',      color: 'text-green-500'  },
-  kyc_rejected:     { icon: 'gpp_bad',            color: 'text-red-500'    },
-  ride_reminder:    { icon: 'schedule',           color: 'text-yellow-500' },
-  token_low:        { icon: 'token',              color: 'text-yellow-500' },
-  default:          { icon: 'notifications',      color: 'text-secondary'  },
+  booking_rejected: { icon: 'cancel',             color: 'text-red-500'    },
+  new_booking_request: { icon: 'notifications',   color: 'text-primary'    },
+  ride_started:        { icon: 'directions_car',  color: 'text-blue-500'   },
+  ride_completed:      { icon: 'flag',            color: 'text-green-500'  },
+  kyc_approved:        { icon: 'verified_user',   color: 'text-green-500'  },
+  kyc_rejected:        { icon: 'gpp_bad',         color: 'text-red-500'    },
+  review_received:     { icon: 'star',            color: 'text-amber-500'  },
+  default:             { icon: 'notifications',   color: 'text-secondary'  },
 }
 
 function timeAgo(timestamp) {
@@ -22,7 +26,9 @@ function timeAgo(timestamp) {
 }
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications()
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications(user?.uid)
   const [open, setOpen]   = useState(false)
   const panelRef = useRef(null)
 
@@ -35,6 +41,16 @@ export default function NotificationBell() {
     setTimeout(() => document.addEventListener('mousedown', handler), 50)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
+
+  const handleItemClick = async (n) => {
+    setOpen(false)
+    if (!n.read) {
+      await markAsRead(n.id)
+    }
+    if (n.actionUrl) {
+      navigate(n.actionUrl)
+    }
+  }
 
   return (
     <div className="relative" ref={panelRef}>
@@ -61,14 +77,22 @@ export default function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant">
             <h3 className="font-bold text-on-surface">Notifications</h3>
-            {unreadCount > 0 && (
+            <div className="flex gap-3">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-label-sm text-primary font-bold hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
               <button
-                onClick={markAllRead}
-                className="text-label-sm text-primary font-bold hover:underline"
+                onClick={() => { setOpen(false); navigate('/notifications') }}
+                className="text-label-sm text-secondary font-bold hover:underline"
               >
-                Mark all read
+                View all
               </button>
-            )}
+            </div>
           </div>
 
           {/* List */}
@@ -84,9 +108,9 @@ export default function NotificationBell() {
                 return (
                   <button
                     key={n.id}
-                    onClick={() => markAsRead(n.id)}
+                    onClick={() => handleItemClick(n)}
                     className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-surface-container transition-all ${
-                      !n.read ? 'bg-primary-fixed/20' : ''
+                      !n.read ? 'bg-primary/5' : ''
                     }`}
                   >
                     <span
@@ -101,7 +125,7 @@ export default function NotificationBell() {
                       <p className="text-[11px] text-secondary/70 mt-1">{timeAgo(n.createdAt)}</p>
                     </div>
                     {!n.read && (
-                      <div className="w-2 h-2 rounded-full bg-primary-container shrink-0 mt-2" />
+                      <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />
                     )}
                   </button>
                 )

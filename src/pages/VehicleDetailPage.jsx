@@ -5,6 +5,8 @@ import { db } from '../lib/firebase'
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import { ROUTES } from '../lib/constants'
+import { useVehicleReviews } from '../hooks/useVehicleReviews'
+import ReviewCard from '../components/ReviewCard'
 
 export default function VehicleDetailPage() {
   const { id } = useParams()
@@ -19,6 +21,10 @@ export default function VehicleDetailPage() {
   const [dropoffDate, setDropoffDate] = useState('Oct 26, 2024')
   const [helmetAddon, setHelmetAddon] = useState(true)
   const [insuranceAddon, setInsuranceAddon] = useState(false)
+
+  const { reviews, stats, loading: reviewsLoading } = useVehicleReviews(id)
+  const [showAllReviews, setShowAllReviews] = useState(false)
+  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3)
 
   useEffect(() => {
     const fetchVehicle = async () => {
@@ -51,7 +57,7 @@ export default function VehicleDetailPage() {
 
   if (!vehicle) return null;
 
-  const tabs = ['Overview', 'Specs', `Reviews (${vehicle.reviewCount || 0})`, 'Location']
+  const tabs = ['Overview', 'Specs', `Reviews (${stats.total})`, 'Location']
 
   const dailyTotal = (vehicle.dailyPrice || 0) * 2
   const helmetCost = helmetAddon ? 200 : 0
@@ -199,10 +205,148 @@ export default function VehicleDetailPage() {
               </div>
             )}
 
-            {activeTab !== 'Overview' && (
-              <div className="py-12 text-center text-on-surface-variant">
-                <span className="material-symbols-outlined text-[48px] block mb-4">info</span>
-                <p>Content for {activeTab} coming soon.</p>
+            {activeTab === 'Specs' && (
+              <div className="space-y-6">
+                <h3 className="font-headline-sm text-headline-sm mb-4">Technical Specifications</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { label: 'Engine Capacity', value: vehicle.cc || '—' },
+                    { label: 'Mileage', value: vehicle.mileage || '—' },
+                    { label: 'Fuel Type', value: vehicle.fuelType || '—' },
+                    { label: 'Year', value: vehicle.year || '—' },
+                    { label: 'Transmission', value: vehicle.transmission || '—' },
+                    { label: 'Cancellation Policy', value: vehicle.cancellationPolicy || 'Flexible' },
+                  ].map(spec => (
+                    <div key={spec.label} className="flex justify-between py-3 border-b border-outline-variant/30 text-sm">
+                      <span className="text-secondary">{spec.label}</span>
+                      <span className="font-bold text-on-surface">{spec.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab.startsWith('Reviews') && (
+              <div id="reviews" className="space-y-6">
+                <h2 className="text-lg font-bold text-on-surface mb-4">
+                  Reviews {stats.total > 0 && <span className="text-secondary font-normal text-base">({stats.total})</span>}
+                </h2>
+
+                {reviewsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2].map(i => (
+                      <div key={i} className="h-24 rounded-2xl bg-surface-container animate-pulse" />
+                    ))}
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <div className="text-center py-10 bg-surface-container rounded-2xl border border-outline-variant">
+                    <span className="text-4xl">⭐</span>
+                    <p className="font-semibold text-secondary mt-2">No reviews yet</p>
+                    <p className="text-sm text-secondary/70 mt-1">Be the first to ride and review!</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Rating overview card */}
+                    <div className="bg-surface-container rounded-2xl p-6 border border-outline-variant">
+                      <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                        {/* Big score */}
+                        <div className="flex flex-col items-center justify-center min-w-[100px]">
+                          <p className="text-5xl font-black text-on-surface leading-none">
+                            {stats.average}
+                          </p>
+                          <div className="flex gap-0.5 mt-2">
+                            {[1, 2, 3, 4, 5].map(i => (
+                              <span key={i} className={`text-sm ${i <= Math.round(Number(stats.average)) ? 'text-amber-400' : 'text-outline-variant'}`}>
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-secondary mt-2">{stats.total} review{stats.total !== 1 ? 's' : ''}</p>
+                        </div>
+
+                        {/* Bar breakdown */}
+                        <div className="flex-1 w-full space-y-2">
+                          {[5, 4, 3, 2, 1].map(star => {
+                            const count = stats.breakdown[star] || 0
+                            const pct = stats.total > 0 ? (count / stats.total) * 100 : 0
+                            return (
+                              <div key={star} className="flex items-center gap-2">
+                                <span className="text-xs text-secondary w-3 text-right">{star}</span>
+                                <span className="text-amber-400 text-xs">★</span>
+                                <div className="flex-1 h-2 bg-surface-container-high rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-secondary w-5 text-right">{count}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Sub-ratings */}
+                      {(Number(stats.cleanliness) > 0 || Number(stats.condition) > 0 || Number(stats.responsiveness) > 0) && (
+                        <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-outline-variant">
+                          {[
+                            { label: 'Cleanliness', value: stats.cleanliness, icon: '🧹' },
+                            { label: 'Condition', value: stats.condition, icon: '🔧' },
+                            { label: 'Owner', value: stats.responsiveness, icon: '👤' },
+                          ].map(({ label, value, icon }) => (
+                            <div key={label} className="text-center">
+                              <p className="text-base">{icon}</p>
+                              <p className="font-bold text-sm text-on-surface mt-1">
+                                {Number(value).toFixed(1)} ★
+                              </p>
+                              <p className="text-[10px] text-secondary">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Review cards list */}
+                    <div className="space-y-3 mt-4">
+                      {displayedReviews.map(review => (
+                        <ReviewCard key={review.id} review={review} />
+                      ))}
+                    </div>
+
+                    {/* Show more / less */}
+                    {reviews.length > 3 && (
+                      <button
+                        onClick={() => setShowAllReviews(!showAllReviews)}
+                        className="w-full mt-4 py-3 rounded-2xl border border-outline-variant text-sm font-bold text-secondary hover:bg-surface-container transition-all"
+                      >
+                        {showAllReviews ? 'Show less ↑' : `Show all ${reviews.length} reviews ↓`}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'Location' && (
+              <div className="space-y-6">
+                <h3 className="font-headline-sm text-headline-sm mb-4">Location</h3>
+                <div className="flex items-center gap-2 text-secondary mb-4">
+                  <span className="material-symbols-outlined">location_on</span>
+                  <span>{vehicle.location || 'Rajpur Road, Dehradun'}</span>
+                </div>
+                <div className="h-72 rounded-2xl overflow-hidden bg-surface-container relative border border-outline-variant">
+                  <iframe
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(vehicle.location || 'Rajpur Road, Dehradun')}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    style={{ border: 0 }}
+                    allowFullScreen=""
+                    aria-hidden="false"
+                    tabIndex="0"
+                    title="Vehicle Location Map"
+                  />
+                </div>
               </div>
             )}
           </section>

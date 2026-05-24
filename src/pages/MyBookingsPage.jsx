@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
 import { Link, useNavigate } from 'react-router-dom'
 import StartRideModal from '../components/StartRideModal'
 import CancelRideModal from '../components/CancelRideModal'
+import toast from 'react-hot-toast'
+import { generateInvoice } from '../lib/invoiceGenerator'
 
 const statusConfig = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: 'pending' },
@@ -23,6 +25,21 @@ export default function MyBookingsPage() {
   const [filter, setFilter] = useState('all')
   const [startRideBooking, setStartRideBooking] = useState(null)
   const [cancelBooking, setCancelBooking] = useState(null)
+  const [downloadingId, setDownloadingId] = useState(null)
+
+  const handleDownloadInvoice = async (booking) => {
+    setDownloadingId(booking.id)
+    try {
+      const vSnap = await getDoc(doc(db, 'vehicles', booking.vehicleId))
+      const vehicleData = vSnap.exists() ? { id: vSnap.id, ...vSnap.data() } : null
+      generateInvoice(booking, vehicleData)
+    } catch (err) {
+      console.error('Invoice download error:', err)
+      toast.error('Failed to generate invoice. Please try again.')
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -201,8 +218,13 @@ export default function MyBookingsPage() {
                           >
                             Book Again
                           </Link>
-                          <button className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium text-secondary hover:bg-surface-container transition-all">
-                            View Invoice
+                           <button
+                            onClick={() => handleDownloadInvoice(b)}
+                            disabled={downloadingId === b.id}
+                            className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium text-secondary hover:bg-surface-container disabled:opacity-60 transition-all flex items-center justify-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">download</span>
+                            {downloadingId === b.id ? 'Generating...' : 'Download Invoice'}
                           </button>
                         </>
                       )}

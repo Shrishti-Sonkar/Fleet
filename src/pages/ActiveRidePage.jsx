@@ -8,6 +8,7 @@ import DropoffPinModal from '../components/DropoffPinModal'
 import CancelRideModal from '../components/CancelRideModal'
 import PostRideRating from '../components/PostRideRating'
 import toast from 'react-hot-toast'
+import { generateInvoice } from '../lib/invoiceGenerator'
 
 const ISSUE_CATEGORIES = [
   'Vehicle breakdown',
@@ -67,8 +68,24 @@ export default function ActiveRidePage() {
   const [reportIssue, setReportIssue] = useState('')
   const [reportDesc, setReportDesc] = useState('')
   const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false)
 
   const { timeLeft, isLate } = useCountdown(booking)
+
+  const handleDownloadInvoice = async () => {
+    if (!booking) return
+    setDownloadingInvoice(true)
+    try {
+      const vSnap = await getDoc(doc(db, 'vehicles', booking.vehicleId))
+      const vehicleData = vSnap.exists() ? { id: vSnap.id, ...vSnap.data() } : null
+      generateInvoice(booking, vehicleData)
+    } catch (err) {
+      console.error('Invoice download error:', err)
+      toast.error('Failed to generate invoice. Please try again.')
+    } finally {
+      setDownloadingInvoice(false)
+    }
+  }
 
   useEffect(() => {
     if (!bookingId) return
@@ -202,33 +219,43 @@ export default function ActiveRidePage() {
             ))}
           </div>
 
-          {/* Countdown */}
+          {/* Countdown / Completed Status Card */}
           <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-primary text-[20px]">timer</span>
-              <p className="font-bold text-on-surface">Time Remaining</p>
-            </div>
-            {isLate ? (
-              <p className="text-red-600 font-bold text-lg animate-pulse">⚠ Overdue — Please return immediately</p>
-            ) : timeLeft ? (
-              <div className="flex gap-4">
-                {timeLeft.days > 0 && (
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.days).padStart(2, '0')}</p>
-                    <p className="text-[10px] uppercase text-secondary tracking-wide">Days</p>
-                  </div>
-                )}
-                <div className="text-center">
-                  <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.hours).padStart(2, '0')}</p>
-                  <p className="text-[10px] uppercase text-secondary tracking-wide">Hrs</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.mins).padStart(2, '0')}</p>
-                  <p className="text-[10px] uppercase text-secondary tracking-wide">Min</p>
-                </div>
+            {booking.status === 'completed' ? (
+              <div className="text-center py-2">
+                <span className="material-symbols-outlined text-green-600 text-5xl mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>task_alt</span>
+                <p className="font-bold text-on-surface text-lg">Ride Completed</p>
+                <p className="text-secondary text-label-md mt-1">Thank you for riding with Fleet!</p>
               </div>
             ) : (
-              <p className="text-secondary">Calculating...</p>
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-primary text-[20px]">timer</span>
+                  <p className="font-bold text-on-surface">Time Remaining</p>
+                </div>
+                {isLate ? (
+                  <p className="text-red-600 font-bold text-lg animate-pulse">⚠ Overdue — Please return immediately</p>
+                ) : timeLeft ? (
+                  <div className="flex gap-4">
+                    {timeLeft.days > 0 && (
+                      <div className="text-center">
+                        <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.days).padStart(2, '0')}</p>
+                        <p className="text-[10px] uppercase text-secondary tracking-wide">Days</p>
+                      </div>
+                    )}
+                    <div className="text-center">
+                      <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.hours).padStart(2, '0')}</p>
+                      <p className="text-[10px] uppercase text-secondary tracking-wide">Hrs</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-3xl font-black text-on-surface tabular-nums">{String(timeLeft.mins).padStart(2, '0')}</p>
+                      <p className="text-[10px] uppercase text-secondary tracking-wide">Min</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-secondary">Calculating...</p>
+                )}
+              </>
             )}
           </div>
 
@@ -276,19 +303,40 @@ export default function ActiveRidePage() {
 
           <div className="border-t border-outline-variant" />
 
-          {/* End / Cancel */}
-          <button
-            onClick={() => setShowDropoff(true)}
-            className="w-full h-14 bg-primary-container text-white font-black text-lg rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg"
-          >
-            END RIDE
-          </button>
-          <button
-            onClick={() => setShowCancel(true)}
-            className="w-full text-error text-label-md font-bold hover:opacity-70 transition-all text-center py-2"
-          >
-            Cancel Booking
-          </button>
+          {/* End / Cancel / Completed Actions */}
+          {booking.status === 'completed' ? (
+            <div className="space-y-3">
+              <button
+                onClick={handleDownloadInvoice}
+                disabled={downloadingInvoice}
+                className="w-full h-14 bg-primary-container text-white font-black text-lg rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined">download</span>
+                {downloadingInvoice ? 'Generating Invoice...' : 'DOWNLOAD INVOICE'}
+              </button>
+              <button
+                onClick={() => navigate('/my-bookings')}
+                className="w-full h-12 bg-surface-container border border-outline-variant rounded-xl font-bold text-on-surface hover:bg-surface-container-high transition-all"
+              >
+                Go to My Bookings
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowDropoff(true)}
+                className="w-full h-14 bg-primary-container text-white font-black text-lg rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              >
+                END RIDE
+              </button>
+              <button
+                onClick={() => setShowCancel(true)}
+                className="w-full text-error text-label-md font-bold hover:opacity-70 transition-all text-center py-2"
+              >
+                Cancel Booking
+              </button>
+            </>
+          )}
         </div>
       </div>
 

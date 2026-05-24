@@ -6,6 +6,7 @@ import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
 import toast from 'react-hot-toast'
+import { sendNotification } from '../lib/notificationHelper'
 
 const tabs = ['Overview', 'KYC Requests', 'All Bookings', 'All Vehicles', 'Users']
 
@@ -68,12 +69,26 @@ export default function AdminDashboard() {
       verifiedBadge: true,
     })
     toast.success('KYC approved!')
+    await sendNotification({
+      userId,
+      type: 'kyc_approved',
+      title: 'ID Verified ✅',
+      body: 'Your documents are approved. You can now book any vehicle on Fleet.',
+      actionUrl: '/browse',
+    })
   }
 
   const rejectKyc = async (userId) => {
     await updateDoc(doc(db, 'verificationRequests', userId), { status: 'rejected' })
     await updateDoc(doc(db, 'users', userId), { kycStatus: 'rejected' })
     toast.success('KYC rejected.')
+    await sendNotification({
+      userId,
+      type: 'kyc_rejected',
+      title: 'KYC Rejected',
+      body: 'Your documents could not be verified. Please re-upload clear photos.',
+      actionUrl: '/profile',
+    })
   }
 
   const toggleVehicleStatus = async (vehicleId, current) => {

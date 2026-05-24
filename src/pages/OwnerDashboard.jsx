@@ -9,6 +9,7 @@ import PageLayout from '../components/layout/PageLayout'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import RideOTPCard from '../components/RideOTPCard'
+import { sendNotification } from '../lib/notificationHelper'
 
 const tabs = ['Overview', 'My Listings', 'Booking Requests', 'Earnings']
 
@@ -53,7 +54,9 @@ export default function OwnerDashboard() {
 
   const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString()
 
-  const approveBooking = async (bookingDocId, vehicleId) => {
+  const approveBooking = async (booking) => {
+    const bookingDocId = booking.id
+    const vehicleId = booking.vehicleId
     const startOTP = generateOTP()
     const dropoffPIN = generateOTP()
     await updateDoc(doc(db, 'bookings', bookingDocId), {
@@ -65,15 +68,33 @@ export default function OwnerDashboard() {
     })
     await updateDoc(doc(db, 'vehicles', vehicleId), { available: false })
     toast.success('Booking approved! OTP generated.')
+    
+    await sendNotification({
+      userId: booking.renterId,
+      type: 'booking_approved',
+      title: 'Booking Approved! 🎉',
+      body: `Your ${booking.vehicleName} is confirmed for ${booking.pickupDate}.`,
+      actionUrl: '/my-bookings',
+    })
   }
 
-  const rejectBooking = async (bookingDocId, vehicleId) => {
+  const rejectBooking = async (booking) => {
+    const bookingDocId = booking.id
+    const vehicleId = booking.vehicleId
     await updateDoc(doc(db, 'bookings', bookingDocId), {
       status: 'cancelled',
       paymentStatus: 'refunded',
     })
     await updateDoc(doc(db, 'vehicles', vehicleId), { available: true })
     toast.success('Booking rejected. Vehicle re-listed.')
+    
+    await sendNotification({
+      userId: booking.renterId,
+      type: 'booking_rejected',
+      title: 'Booking Not Approved',
+      body: `Your request for ${booking.vehicleName} was declined. Try another vehicle.`,
+      actionUrl: '/browse',
+    })
   }
 
   const totalEarnings = myBookings
@@ -238,13 +259,13 @@ export default function OwnerDashboard() {
                     {b.status === 'pending' && (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => approveBooking(b.id, b.vehicleId)}
+                          onClick={() => approveBooking(b)}
                           className="h-9 px-4 bg-green-600 text-white rounded-lg font-bold text-label-md hover:opacity-90 active:scale-95 transition-all"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => rejectBooking(b.id, b.vehicleId)}
+                          onClick={() => rejectBooking(b)}
                           className="h-9 px-4 bg-error text-white rounded-lg font-bold text-label-md hover:opacity-90 active:scale-95 transition-all"
                         >
                           Reject

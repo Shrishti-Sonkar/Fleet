@@ -9,4 +9,24 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('firebase')) {
+              return 'firebase'
+            }
+            if (id.includes('jspdf')) {
+              return 'jspdf'
+            }
+            if (id.includes('framer-motion')) {
+              return 'framer-motion'
+            }
+            return 'vendor'
+          }
+        },
+      },
+    },
+  },
 })

@@ -1,0 +1,86 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── HELPER FUNCTIONS ──
+    // Checks if the authenticated user is an administrator
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ── USERS COLLECTION ──
+    match /users/{userId} {
+      // Any logged-in user can read profiles (needed to display owner names, avatars, etc.)
+      allow read: if request.auth != null;
+      // Only the user themselves or an admin can write/update their profile
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      
+      // ── ADDRESSES SUBCOLLECTION ──
+      match /addresses/{addressId} {
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // ── VEHICLES COLLECTION ──
+    match /vehicles/{vehicleId} {
+      // Anyone (even unauthenticated guests) can browse the vehicles
+      allow read: if true;
+      // Any authenticated user can create/list a vehicle
+      allow create: if request.auth != null;
+      // Only the vehicle owner or an admin can update or delete vehicle details
+      allow update, delete: if request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // ── BOOKINGS COLLECTION ──
+    match /bookings/{bookingId} {
+      // Only the renter of the booking, the owner of the vehicle, or an admin can read/write the booking
+      allow read, write: if request.auth != null && (
+        resource.data.renterId == request.auth.uid || 
+        resource.data.ownerId == request.auth.uid || 
+        request.resource.data.renterId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ── REVIEWS COLLECTION ──
+    match /reviews/{reviewId} {
+      // Anyone can read reviews
+      allow read: if true;
+      // Only authenticated renters can write a review for a booking
+      allow create: if request.auth != null && request.resource.data.renterId == request.auth.uid;
+      // Only the review creator or an admin can modify/delete it
+      allow update, delete: if request.auth != null && (resource.data.renterId == request.auth.uid || isAdmin());
+    }
+
+    // ── KYC VERIFICATION REQUESTS ──
+    match /verificationRequests/{userId} {
+      // Users can view and submit their own KYC requests, and admins can read/write them for approvals
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── NOTIFICATIONS COLLECTION ──
+    match /notifications/{notifId} {
+      // Users can only read notifications assigned to them
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Any authenticated user/system can create a notification directed to another user
+      allow create: if request.auth != null;
+      // Only the recipient can mark notifications as read (update) or delete them
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // ── REPORTS (ISSUES) COLLECTION ──
+    match /reports/{reportId} {
+      allow create: if request.auth != null && request.resource.data.renterId == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.renterId == request.auth.uid || isAdmin());
+    }
+
+    // ── COUPONS COLLECTION ──
+    match /coupons/{couponId} {
+      // Only logged-in users can read coupons to validate them at checkout
+      allow read: if request.auth != null;
+    }
+  }
+}

@@ -8,6 +8,7 @@ import Footer from '../components/layout/Footer'
 import { useBooking } from '../hooks/useBooking'
 import { ROUTES } from '@/lib/constants'
 import toast from 'react-hot-toast'
+import { sendNotification } from '../lib/notificationHelper'
 
 // ── Date/Time helpers ─────────────────────────────────────────────────────────
 function getNext60Days() {
@@ -227,15 +228,33 @@ export default function BookingPage() {
     pickupDate, pickupTime, dropoffDate, dropoffTime, pickupLocation: location,
   }
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!vehicle) return
     if (!hasEnoughTokens) { toast.error('Insufficient tokens for this hourly booking'); return }
     const rzpKey = import.meta.env.VITE_RAZORPAY_KEY_ID || ''
     if (rzpKey.includes('test') || rzpKey.includes('YOUR') || !rzpKey) {
-      saveBookingToFirestore(vehicle, pricing)
+      const bid = await saveBookingToFirestore(vehicle, pricing)
+      if (bid) {
+        await sendNotification({
+          userId: vehicle.ownerId,
+          type: 'new_booking_request',
+          title: 'New Booking Request 🔔',
+          body: `${userDoc?.name || user.displayName || 'Someone'} wants to book your ${vehicle.name}.`,
+          actionUrl: '/vendor/dashboard',
+        })
+      }
     } else {
-      initiateRazorpayPayment(vehicle, pricing, (paymentId) => {
-        saveBookingToFirestore(vehicle, pricing, paymentId)
+      initiateRazorpayPayment(vehicle, pricing, async (paymentId) => {
+        const bid = await saveBookingToFirestore(vehicle, pricing, paymentId)
+        if (bid) {
+          await sendNotification({
+            userId: vehicle.ownerId,
+            type: 'new_booking_request',
+            title: 'New Booking Request 🔔',
+            body: `${userDoc?.name || user.displayName || 'Someone'} wants to book your ${vehicle.name}.`,
+            actionUrl: '/vendor/dashboard',
+          })
+        }
       })
     }
   }

@@ -30,6 +30,8 @@ const AboutPage          = lazy(() => import('./pages/AboutPage'))
 const SupportPage        = lazy(() => import('./pages/SupportPage'))
 const VerificationPage   = lazy(() => import('./pages/VerificationPage'))
 const AdminDashboard     = lazy(() => import('./pages/AdminDashboard'))
+const EditProfilePage    = lazy(() => import('./pages/EditProfilePage'))
+const NotificationsPage  = lazy(() => import('./pages/NotificationsPage'))
 
 // Loading fallback
 function PageLoader() {
@@ -118,6 +120,12 @@ export default function App() {
           {/* ── SHARED (both roles) ── */}
           <Route path={ROUTES.PROFILE} element={
             <ProtectedRoute><ProfilePage /></ProtectedRoute>
+          } />
+          <Route path="/profile/edit" element={
+            <ProtectedRoute><EditProfilePage /></ProtectedRoute>
+          } />
+          <Route path="/notifications" element={
+            <ProtectedRoute><NotificationsPage /></ProtectedRoute>
           } />
 
           {/* ── ADMIN ── */}
