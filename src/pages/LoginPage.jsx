@@ -1,44 +1,84 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
+import { useAuth } from '../context/AuthContext'
+import toast from 'react-hot-toast'
 
 export default function LoginPage() {
-  const [activeTab, setActiveTab] = useState('signin')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [remember, setRemember] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [error, setError] = useState('')
-  const [loadingState, setLoadingState] = useState(false)
   const navigate = useNavigate()
-  const { signin, signup, googleSignin } = useAuth()
+  const { signin, signup, googleSignin, sendOTP, verifyOTP } = useAuth()
 
+  // ── Top-level tab: Sign In / Sign Up ─────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('signin')
+
+  // ── Sign-In state ─────────────────────────────────────────────────────────
+  const [loginTab, setLoginTab] = useState('email') // 'email' | 'otp'
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [showSigninPwd, setShowSigninPwd] = useState(false)
+  const [rememberMe, setRememberMe]       = useState(true)
+  const [signinError, setSigninError]     = useState('')
+  const [signinLoading, setSigninLoading] = useState(false)
+
+  // ── OTP state ─────────────────────────────────────────────────────────────
+  const [otpPhone, setOtpPhone]       = useState('')
+  const [otp, setOtp]                 = useState(['', '', '', '', '', ''])
+  const [otpSent, setOtpSent]         = useState(false)
+  const [otpTimer, setOtpTimer]       = useState(0)
+  const [sendingOtp, setSendingOtp]   = useState(false)
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()]
+
+  // OTP countdown
+  useEffect(() => {
+    if (otpTimer <= 0) return
+    const id = setInterval(() => setOtpTimer(t => t - 1), 1000)
+    return () => clearInterval(id)
+  }, [otpTimer])
+
+  // ── Sign-Up state (dedicated — no collision with sign-in) ─────────────────
+  const [signupName, setSignupName]       = useState('')
+  const [signupEmail, setSignupEmail]     = useState('')
+  const [signupPhone, setSignupPhone]     = useState('')
+  const [signupPassword, setSignupPassword] = useState('')
+  const [signupConfirm, setSignupConfirm] = useState('')
+  const [showSignupPwd, setShowSignupPwd] = useState(false)
+  const [showConfirm, setShowConfirm]     = useState(false)
+  const [agreeTerms, setAgreeTerms]       = useState(false)
+  const [signupLoading, setSignupLoading] = useState(false)
+  const [signupError, setSignupError]     = useState('')
+  const [showSuccess, setShowSuccess]     = useState(false)
+
+  // ── Password strength helper ───────────────────────────────────────────────
+  const pwdStrength = (pwd) => {
+    if (!pwd) return { level: 0, label: '' }
+    if (pwd.length < 4) return { level: 1, label: 'Weak' }
+    if (pwd.length < 6) return { level: 2, label: 'Fair' }
+    if (pwd.length < 8) return { level: 3, label: 'Good' }
+    return { level: 4, label: 'Strong' }
+  }
+  const strength = pwdStrength(signupPassword)
+
+  // ── Handlers — Sign In ────────────────────────────────────────────────────
   const handleSignIn = async (e) => {
     e.preventDefault()
-    navigate(ROUTES.HOME)
-  }
-
-  const handleSignUp = async (e) => {
-    e.preventDefault()
-    setError('')
-    if (!name.trim()) return setError('Name is required')
-    if (password.length < 8) return setError('Password must be 8+ characters')
-    setLoadingState(true)
+    setSigninError('')
+    setSigninLoading(true)
     try {
-      await signup(email, password, name, phone)
-      toast.success('Account created! Welcome to Fleet.')
-      setShowSuccess(true)
+      await signin(email, password, rememberMe)
+      toast.success('Welcome back to Fleet!')
+      navigate(ROUTES.HOME)
     } catch (err) {
       const msg =
-        err.code === 'auth/email-already-in-use'
-          ? 'Email already registered. Please sign in.'
-          : 'Signup failed. Please try again.'
-      setError(msg)
+        err.code === 'auth/invalid-credential'
+          ? 'Invalid email or password'
+          : err.code === 'auth/too-many-requests'
+          ? 'Too many attempts. Try again later.'
+          : 'Login failed. Please try again.'
+      setSigninError(msg)
       toast.error(msg)
     } finally {
-      setLoadingState(false)
+      setSigninLoading(false)
     }
   }
 
@@ -46,27 +86,137 @@ export default function LoginPage() {
     try {
       await googleSignin()
       toast.success('Signed in with Google!')
-      navigate('/')
+      navigate(ROUTES.HOME)
     } catch {
       toast.error('Google sign-in failed')
     }
   }
 
+  // ── Handlers — OTP ────────────────────────────────────────────────────────
+  const handleSendOTP = async () => {
+    const cleaned = otpPhone.replace(/\D/g, '')
+    if (cleaned.length !== 10) {
+      toast.error('Enter a valid 10-digit mobile number')
+      return
+    }
+    setSendingOtp(true)
+    try {
+      await sendOTP('+91' + cleaned)
+      setOtpSent(true)
+      setOtpTimer(30)
+      toast.success('OTP sent to +91 ' + cleaned)
+    } catch (err) {
+      const msg =
+        err.code === 'auth/invalid-phone-number'
+          ? 'Invalid phone number'
+          : err.code === 'auth/too-many-requests'
+          ? 'Too many attempts. Try after some time.'
+          : 'Failed to send OTP. Try again.'
+      toast.error(msg)
+    } finally {
+      setSendingOtp(false)
+    }
+  }
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return
+    const next = [...otp]
+    next[index] = value.slice(-1)
+    setOtp(next)
+    if (value && index < 5) otpRefs[index + 1].current?.focus()
+  }
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs[index - 1].current?.focus()
+    }
+  }
+
+  const handleVerifyOTP = async () => {
+    const otpString = otp.join('')
+    if (otpString.length !== 6) {
+      toast.error('Enter complete 6-digit OTP')
+      return
+    }
+    setVerifyingOtp(true)
+    try {
+      await verifyOTP(otpString)
+      toast.success('Phone verified! Welcome to Fleet 🎉')
+      navigate('/')
+    } catch (err) {
+      const msg =
+        err.code === 'auth/invalid-verification-code'
+          ? 'Wrong OTP. Please check and retry.'
+          : 'Verification failed. Try again.'
+      toast.error(msg)
+      setOtp(['', '', '', '', '', ''])
+      otpRefs[0].current?.focus()
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
+
+  // ── Handlers — Sign Up ────────────────────────────────────────────────────
+  const validateSignup = () => {
+    if (!signupName.trim() || signupName.trim().length < 2)
+      return 'Enter your full name (min 2 characters)'
+    if (!signupEmail || !signupEmail.includes('@'))
+      return 'Enter a valid email address'
+    if (!signupPhone || signupPhone.replace(/\D/g, '').length !== 10)
+      return 'Enter a valid 10-digit mobile number'
+    if (signupPassword.length < 8)
+      return 'Password must be at least 8 characters'
+    if (signupPassword !== signupConfirm)
+      return 'Passwords do not match'
+    if (!agreeTerms)
+      return 'Please accept the Terms & Conditions to continue'
+    return null
+  }
+
+  const handleSignUp = async (e) => {
+    e.preventDefault()
+    const err = validateSignup()
+    if (err) {
+      setSignupError(err)
+      toast.error(err)
+      return
+    }
+    setSignupLoading(true)
+    setSignupError('')
+    try {
+      await signup(signupEmail, signupPassword, signupName.trim(), '+91' + signupPhone.replace(/\D/g, ''))
+      toast.success('Account created! Welcome to Fleet 🎉')
+      setShowSuccess(true)
+    } catch (err) {
+      const msg =
+        err.code === 'auth/email-already-in-use'
+          ? 'This email is already registered. Please sign in.'
+          : err.code === 'auth/weak-password'
+          ? 'Password is too weak. Use 8+ characters.'
+          : 'Signup failed. Please try again.'
+      setSignupError(msg)
+      toast.error(msg)
+    } finally {
+      setSignupLoading(false)
+    }
+  }
+
+  // ── Success screen ────────────────────────────────────────────────────────
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center text-center p-gutter">
-        <div className="w-24 h-24 bg-primary-container/10 rounded-full flex items-center justify-center mb-8">
-          <span className="material-symbols-outlined text-primary text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+      <div className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center text-center p-8">
+        <div className="w-24 h-24 bg-primary-fixed rounded-full flex items-center justify-center mb-8">
+          <span className="material-symbols-outlined text-primary-container text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>
             check_circle
           </span>
         </div>
-        <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Welcome aboard!</h3>
+        <h3 className="text-headline-sm font-bold text-on-surface mb-2">Welcome aboard!</h3>
         <p className="text-secondary max-w-sm mb-10">Your account has been successfully created. Let's get you on the road.</p>
         <button
           onClick={() => navigate(ROUTES.HOME)}
-          className="w-full max-w-xs h-12 bg-primary-container text-white font-bold rounded-xl active:scale-95 transition-all"
+          className="w-full max-w-xs h-12 bg-primary-container text-white font-bold rounded-full active:scale-95 transition-all"
         >
-          Start Browsing Vehicles
+          Start Browsing Vehicles →
         </button>
       </div>
     )
@@ -74,133 +224,314 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen w-full bg-background">
-      {/* Left – Brand Panel */}
+      {/* ── Left: Brand Panel ── */}
       <section className="hidden lg:flex lg:w-1/2 bg-primary-container relative flex-col items-center justify-center p-section-padding-lg overflow-hidden">
         <div className="absolute top-12 left-12 flex items-center gap-2">
-          <span className="font-headline-sm text-headline-sm font-black text-white">Fleet</span>
+          <span className="text-headline-sm font-black text-white">Fleet</span>
         </div>
         <div className="relative z-10 text-center max-w-md">
           <div className="mb-12 relative">
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-80 h-20 rounded-[100%] opacity-40"
-              style={{ background: 'radial-gradient(circle at 50% 90%, rgba(0,0,0,0.1) 0%, transparent 70%)' }} />
+            <div
+              className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-80 h-20 rounded-[100%] opacity-40"
+              style={{ background: 'radial-gradient(circle at 50% 90%, rgba(0,0,0,0.1) 0%, transparent 70%)' }}
+            />
             <img
               alt="3D Premium Scooter"
               className="relative z-20 w-full h-auto drop-shadow-2xl transform hover:scale-105 transition-transform duration-500"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZMM-cx_8_SAbgfeJqgF0Le75-tRHkpTQ1_ZxiXVFgMMOwauF1AA0wKSVpoVfz2MXlDmxO3XMoL9yNt4vpnm1M8NDMQT-gDIBEixYov1cswPPMnpq-kzZxwqMaEMiBaVD1Nvj5iIZC1S6nJSZ10BU7-K3ui2nbV9mPDFU0nlUyxUzPOolzDnKqJrSRwYfO0giLkdD0yuUJ9iG-iH0A4dlfdzJKyUhtanyOlswLDRC9qAXJyUOMlSlFW7l5ji6GoWoqRoqOUkB0uFIe"
             />
           </div>
-          <h1 className="font-display text-display text-white mb-4">India's favourite ride rental</h1>
-          <p className="font-headline-sm text-headline-sm text-white opacity-90">Premium mobility for the modern explorer.</p>
+          <h1 className="text-display-mobile font-bold text-white mb-4">India's favourite ride rental</h1>
+          <p className="text-headline-sm text-white opacity-90">Premium mobility for the modern explorer.</p>
         </div>
         <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-white opacity-5 rounded-full blur-3xl" />
         <div className="absolute top-20 -left-20 w-64 h-64 bg-black opacity-5 rounded-full blur-2xl" />
       </section>
 
-      {/* Right – Auth Forms */}
-      <section className="w-full lg:w-1/2 bg-surface-container-lowest flex flex-col items-center justify-center px-gutter py-section-padding-lg">
+      {/* ── Right: Auth Forms ── */}
+      <section className="w-full lg:w-1/2 bg-surface-container-lowest flex flex-col items-center justify-center px-gutter py-10 overflow-y-auto">
         <div className="w-full max-w-md">
-          {/* Tab toggle */}
-          <nav className="flex gap-8 mb-10">
+
+          {/* Top tab nav: Sign In | Sign Up */}
+          <nav className="flex gap-8 mb-8">
             <button
               onClick={() => setActiveTab('signin')}
-              className={`font-headline-sm text-headline-sm pb-2 transition-all ${
-                activeTab === 'signin' ? 'active-tab' : 'text-secondary hover:text-primary'
-              }`}
+              className={`text-headline-sm pb-2 transition-all ${activeTab === 'signin' ? 'active-tab font-bold border-b-2 border-primary-container text-on-surface' : 'text-secondary hover:text-primary'}`}
             >
               Sign In
             </button>
             <button
               onClick={() => setActiveTab('signup')}
-              className={`font-headline-sm text-headline-sm pb-2 transition-all ${
-                activeTab === 'signup' ? 'active-tab' : 'text-secondary hover:text-primary'
-              }`}
+              className={`text-headline-sm pb-2 transition-all ${activeTab === 'signup' ? 'active-tab font-bold border-b-2 border-primary-container text-on-surface' : 'text-secondary hover:text-primary'}`}
             >
               Sign Up
             </button>
           </nav>
 
-          {/* Sign In Form */}
+          {/* ════════════════════════════════════════════════
+              SIGN IN TAB
+          ════════════════════════════════════════════════ */}
           {activeTab === 'signin' && (
-            <div className="space-y-8">
+            <div className="space-y-6">
               <div>
-                <h2 className="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-md md:text-headline-md text-on-surface">
-                  Welcome back
-                </h2>
-                <p className="text-secondary mt-2">Enter your credentials to access your Fleet account.</p>
+                <h2 className="text-headline-lg-mobile font-bold text-on-surface">Welcome back</h2>
+                <p className="text-secondary mt-1 text-body-md">Enter your credentials to access your Fleet account.</p>
               </div>
 
-              {/* Social buttons */}
-              <div className="grid grid-cols-3 gap-4">
-                <button id="google-login" onClick={handleGoogle} className="flex items-center justify-center py-3 border border-outline-variant rounded-xl hover:bg-surface transition-all active:scale-95 duration-150">
-                  <img alt="Google" className="w-6 h-6"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU" />
-                </button>
-                <button id="phone-login" className="flex items-center justify-center py-3 border border-outline-variant rounded-xl hover:bg-surface transition-all active:scale-95 duration-150">
-                  <span className="material-symbols-outlined text-on-surface">phone</span>
-                </button>
-                <button id="email-login" className="flex items-center justify-center py-3 border border-outline-variant rounded-xl hover:bg-surface transition-all active:scale-95 duration-150">
-                  <span className="material-symbols-outlined text-on-surface">mail</span>
-                </button>
-              </div>
-
-              {/* Divider */}
-              <div className="relative flex items-center gap-4">
-                <div className="flex-grow h-px bg-outline-variant" />
-                <span className="text-label-md font-label-md text-secondary uppercase tracking-widest">Or login with</span>
-                <div className="flex-grow h-px bg-outline-variant" />
-              </div>
-
-              {/* Form */}
-              <form className="space-y-6" onSubmit={handleSignIn}>
-                <div className="space-y-2">
-                  <label htmlFor="email" className="font-label-md text-label-md text-on-surface-variant ml-1 block">Email Address</label>
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center px-1">
-                    <label htmlFor="password" className="font-label-md text-label-md text-on-surface-variant">Password</label>
-                    <a href="#" className="text-label-md font-label-md text-primary hover:underline">Forgot?</a>
-                  </div>
-                  <input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-                <div className="flex items-center gap-2 px-1">
-                  <input
-                    id="remember"
-                    type="checkbox"
-                    checked={remember}
-                    onChange={e => setRemember(e.target.checked)}
-                    className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer"
-                  />
-                  <label htmlFor="remember" className="font-label-md text-label-md text-secondary cursor-pointer">Keep me signed in</label>
-                </div>
-                {error && (
-                  <p className="text-error text-label-md bg-red-50 border border-red-200 px-4 py-3 rounded-lg">{error}</p>
-                )}
+              {/* Email | Mobile OTP sub-tab switcher */}
+              <div className="flex bg-surface-container p-1 rounded-xl">
                 <button
-                  type="submit"
-                  id="signin-btn"
-                  disabled={loadingState}
-                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => setLoginTab('email')}
+                  className={`flex-1 py-2 rounded-lg text-label-md font-medium transition-all ${
+                    loginTab === 'email'
+                      ? 'bg-surface-container-lowest text-on-surface shadow-sm font-bold'
+                      : 'text-secondary hover:text-on-surface'
+                  }`}
                 >
-                  {loadingState ? 'Signing in...' : 'Sign In to Fleet'}
+                  📧 Email
                 </button>
-              </form>
+                <button
+                  onClick={() => setLoginTab('otp')}
+                  className={`flex-1 py-2 rounded-lg text-label-md font-medium transition-all ${
+                    loginTab === 'otp'
+                      ? 'bg-surface-container-lowest text-on-surface shadow-sm font-bold'
+                      : 'text-secondary hover:text-on-surface'
+                  }`}
+                >
+                  📱 Mobile OTP
+                </button>
+              </div>
 
-              <p className="text-center text-label-md font-label-md text-secondary">
+              {/* ── EMAIL LOGIN ── */}
+              {loginTab === 'email' && (
+                <form className="space-y-5" onSubmit={handleSignIn}>
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="email" className="block text-label-md font-medium text-secondary mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">mail</span>
+                      <input
+                        id="email"
+                        type="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all text-body-lg"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label htmlFor="password" className="block text-label-md font-medium text-secondary mb-1.5">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock</span>
+                      <input
+                        id="password"
+                        type={showSigninPwd ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className="w-full h-12 pl-11 pr-12 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all text-body-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSigninPwd(v => !v)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          {showSigninPwd ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Remember Me + Forgot Password */}
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2.5 cursor-pointer group">
+                      <button
+                        type="button"
+                        onClick={() => setRememberMe(v => !v)}
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                          rememberMe
+                            ? 'bg-primary-container border-primary-container'
+                            : 'border-outline-variant bg-surface'
+                        }`}
+                      >
+                        {rememberMe && (
+                          <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                            check
+                          </span>
+                        )}
+                      </button>
+                      <span className="text-label-md text-on-surface group-hover:text-primary transition-colors">
+                        Remember me
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/forgot-password')}
+                      className="text-label-md text-primary font-medium hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+
+                  {/* Error */}
+                  {signinError && (
+                    <p className="text-error text-label-md bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{signinError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    id="signin-btn"
+                    disabled={signinLoading}
+                    className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {signinLoading ? 'Signing in...' : 'Sign In to Fleet →'}
+                  </button>
+
+                  {/* Divider */}
+                  <div className="relative flex items-center gap-4">
+                    <div className="flex-grow h-px bg-outline-variant" />
+                    <span className="text-label-md text-secondary uppercase tracking-widest">or</span>
+                    <div className="flex-grow h-px bg-outline-variant" />
+                  </div>
+
+                  {/* Google */}
+                  <button
+                    type="button"
+                    id="google-login"
+                    onClick={handleGoogle}
+                    className="w-full h-12 border-2 border-outline-variant rounded-full font-bold flex items-center justify-center gap-3 hover:border-primary-container hover:bg-primary-fixed transition-all"
+                  >
+                    <img
+                      alt="Google"
+                      className="w-5 h-5"
+                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU"
+                    />
+                    Continue with Google
+                  </button>
+                </form>
+              )}
+
+              {/* ── MOBILE OTP LOGIN ── */}
+              {loginTab === 'otp' && (
+                <div className="space-y-4">
+                  {!otpSent ? (
+                    <>
+                      {/* Phone input */}
+                      <div>
+                        <label className="block text-label-md font-medium text-secondary mb-1.5">
+                          Mobile Number
+                        </label>
+                        <div className="flex h-12 border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-container">
+                          <div className="flex items-center px-4 bg-surface-container border-r border-outline-variant shrink-0">
+                            <span className="text-label-md font-bold text-on-surface">🇮🇳 +91</span>
+                          </div>
+                          <input
+                            type="tel"
+                            value={otpPhone}
+                            onChange={e => setOtpPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="9876543210"
+                            className="flex-1 px-4 bg-transparent outline-none text-body-lg"
+                            maxLength={10}
+                          />
+                        </div>
+                        <p className="text-label-sm text-secondary mt-1">OTP will be sent via SMS</p>
+                      </div>
+
+                      <button
+                        id="send-otp-btn"
+                        onClick={handleSendOTP}
+                        disabled={sendingOtp || otpPhone.length !== 10}
+                        className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                      >
+                        {sendingOtp ? 'Sending OTP...' : 'Send OTP →'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* OTP entry screen */}
+                      <div className="text-center">
+                        <p className="text-body-lg text-on-surface font-medium">Enter OTP sent to</p>
+                        <p className="text-primary font-bold text-body-lg">+91 {otpPhone}</p>
+                        <button
+                          onClick={() => { setOtpSent(false); setOtp(['', '', '', '', '', '']) }}
+                          className="text-label-md text-secondary underline mt-1 hover:text-primary transition-colors"
+                        >
+                          Change number
+                        </button>
+                      </div>
+
+                      {/* 6-digit OTP boxes */}
+                      <div className="flex gap-3 justify-center my-4">
+                        {otp.map((digit, i) => (
+                          <input
+                            key={i}
+                            ref={otpRefs[i]}
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={digit}
+                            onChange={e => handleOtpChange(i, e.target.value)}
+                            onKeyDown={e => handleOtpKeyDown(i, e)}
+                            className={`w-11 h-14 text-center text-[22px] font-bold border-2 rounded-xl outline-none transition-all ${
+                              digit
+                                ? 'border-primary-container bg-primary-fixed text-on-primary-fixed'
+                                : 'border-outline-variant bg-surface'
+                            } focus:border-primary-container focus:ring-2 focus:ring-primary-fixed`}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Resend timer */}
+                      <p className="text-center text-label-md text-secondary">
+                        {otpTimer > 0 ? (
+                          <>Resend OTP in <span className="font-bold text-primary">{otpTimer}s</span></>
+                        ) : (
+                          <button onClick={handleSendOTP} className="text-primary font-bold underline">
+                            Resend OTP
+                          </button>
+                        )}
+                      </p>
+
+                      <button
+                        id="verify-otp-btn"
+                        onClick={handleVerifyOTP}
+                        disabled={verifyingOtp || otp.join('').length !== 6}
+                        className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+                      >
+                        {verifyingOtp ? 'Verifying...' : 'Verify & Login ✓'}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Divider + Google */}
+                  <div className="relative flex items-center gap-4 mt-2">
+                    <div className="flex-grow h-px bg-outline-variant" />
+                    <span className="text-label-md text-secondary">or</span>
+                    <div className="flex-grow h-px bg-outline-variant" />
+                  </div>
+                  <button
+                    onClick={handleGoogle}
+                    className="w-full h-12 border-2 border-outline-variant rounded-full font-bold flex items-center justify-center gap-3 hover:border-primary-container hover:bg-primary-fixed transition-all"
+                  >
+                    <img
+                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU"
+                      alt="Google"
+                      className="w-5 h-5"
+                    />
+                    Continue with Google
+                  </button>
+                </div>
+              )}
+
+              <p className="text-center text-label-md text-secondary pt-2">
                 Don't have an account?{' '}
                 <button onClick={() => setActiveTab('signup')} className="text-primary font-bold hover:underline">
                   Create an account
@@ -209,80 +540,232 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Sign Up Form */}
+          {/* ════════════════════════════════════════════════
+              SIGN UP TAB
+          ════════════════════════════════════════════════ */}
           {activeTab === 'signup' && (
-            <div className="space-y-8">
+            <div className="space-y-5">
               <div>
-                <h2 className="font-headline-md text-headline-md text-on-surface">Create account</h2>
-                <p className="text-secondary mt-2">Join India's most premium vehicle rental community.</p>
+                <h2 className="text-headline-lg-mobile font-bold text-on-surface">Create account</h2>
+                <p className="text-secondary mt-1 text-body-md">Join India's most premium vehicle rental community.</p>
               </div>
-              <form className="space-y-5" onSubmit={handleSignUp}>
-                <div className="space-y-2">
-                  <label htmlFor="signup-name" className="font-label-md text-label-md text-on-surface-variant ml-1 block">Full Name</label>
-                  <input
-                    id="signup-name"
-                    type="text"
-                    placeholder="Rahul Sharma"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="signup-email" className="font-label-md text-label-md text-on-surface-variant ml-1 block">Email Address</label>
-                  <input
-                    id="signup-email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="signup-phone" className="font-label-md text-label-md text-on-surface-variant ml-1 block">Mobile Number</label>
-                  <div className="flex gap-2">
-                    <span className="inline-flex items-center justify-center px-4 bg-surface rounded-xl text-secondary font-label-md border border-outline-variant">+91</span>
+
+              <form className="space-y-4" onSubmit={handleSignUp}>
+                {/* Error banner */}
+                {signupError && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">
+                    <span className="material-symbols-outlined text-error text-[18px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      error
+                    </span>
+                    <p className="text-label-md text-error">{signupError}</p>
+                  </div>
+                )}
+
+                {/* Full Name */}
+                <div>
+                  <label className="block text-label-md font-medium text-secondary mb-1.5">Full Name *</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">person</span>
                     <input
-                      id="signup-phone"
-                      type="tel"
-                      placeholder="98765 43210"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      className="flex-grow h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
+                      id="signup-name"
+                      type="text"
+                      value={signupName}
+                      onChange={e => setSignupName(e.target.value)}
+                      placeholder="Rahul Sharma"
+                      className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="signup-password" className="font-label-md text-label-md text-on-surface-variant ml-1 block">Password</label>
-                  <input
-                    id="signup-password"
-                    type="password"
-                    placeholder="Min. 8 characters"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface border border-outline-variant focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all"
-                  />
+
+                {/* Email */}
+                <div>
+                  <label className="block text-label-md font-medium text-secondary mb-1.5">Email Address *</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">mail</span>
+                    <input
+                      id="signup-email"
+                      type="email"
+                      value={signupEmail}
+                      onChange={e => setSignupEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full h-12 pl-11 pr-4 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
+                    />
+                  </div>
                 </div>
-                <div className="py-2">
-                  <p className="text-[12px] text-secondary leading-relaxed">
-                    By clicking "Create Account", you agree to our{' '}
-                    <a href="#" className="text-primary underline">Terms of Service</a> and{' '}
-                    <a href="#" className="text-primary underline">Privacy Policy</a>.
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="block text-label-md font-medium text-secondary mb-1.5">Mobile Number *</label>
+                  <div className="flex h-12 border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-container">
+                    <div className="flex items-center px-4 bg-surface-container border-r border-outline-variant shrink-0">
+                      <span className="text-label-md font-bold">🇮🇳 +91</span>
+                    </div>
+                    <input
+                      id="signup-phone"
+                      type="tel"
+                      value={signupPhone}
+                      onChange={e => setSignupPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="9876543210"
+                      className="flex-1 px-4 bg-transparent outline-none text-body-lg"
+                      maxLength={10}
+                    />
+                  </div>
+                  <p className="text-label-sm text-secondary mt-1">Used for booking confirmations &amp; OTP</p>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-label-md font-medium text-secondary mb-1.5">Password *</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock</span>
+                    <input
+                      id="signup-password"
+                      type={showSignupPwd ? 'text' : 'password'}
+                      value={signupPassword}
+                      onChange={e => setSignupPassword(e.target.value)}
+                      placeholder="Min 8 characters"
+                      className="w-full h-12 pl-11 pr-12 border border-outline-variant rounded-xl bg-surface focus:ring-2 focus:ring-primary-container outline-none text-body-lg transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPwd(v => !v)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {showSignupPwd ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                  </div>
+                  {/* Strength indicator */}
+                  {signupPassword && (
+                    <div className="flex items-center gap-1 mt-2">
+                      {[1, 2, 3, 4].map(level => (
+                        <div
+                          key={level}
+                          className={`h-1 flex-1 rounded-full transition-all ${
+                            strength.level >= level
+                              ? level === 1 ? 'bg-red-400'
+                              : level === 2 ? 'bg-yellow-400'
+                              : level === 3 ? 'bg-blue-400'
+                              : 'bg-green-500'
+                              : 'bg-surface-container-high'
+                          }`}
+                        />
+                      ))}
+                      <span className="text-label-sm text-secondary ml-2 shrink-0">{strength.label}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label className="block text-label-md font-medium text-secondary mb-1.5">Confirm Password *</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-secondary text-[20px]">lock_clock</span>
+                    <input
+                      id="signup-confirm"
+                      type={showConfirm ? 'text' : 'password'}
+                      value={signupConfirm}
+                      onChange={e => setSignupConfirm(e.target.value)}
+                      placeholder="Repeat your password"
+                      className={`w-full h-12 pl-11 pr-12 border rounded-xl bg-surface focus:ring-2 outline-none text-body-lg transition-all ${
+                        signupConfirm && signupPassword !== signupConfirm
+                          ? 'border-error focus:ring-red-200'
+                          : signupConfirm && signupPassword === signupConfirm
+                          ? 'border-green-500 focus:ring-green-200'
+                          : 'border-outline-variant focus:ring-primary-container'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirm(v => !v)}
+                      className="absolute right-10 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {showConfirm ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                    {/* Match icon */}
+                    {signupConfirm && (
+                      <span
+                        className={`absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-[20px] ${
+                          signupPassword === signupConfirm ? 'text-green-500' : 'text-error'
+                        }`}
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        {signupPassword === signupConfirm ? 'check_circle' : 'cancel'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Terms & Conditions */}
+                <div className="flex items-start gap-3 py-1">
+                  <button
+                    type="button"
+                    onClick={() => setAgreeTerms(v => !v)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                      agreeTerms
+                        ? 'bg-primary-container border-primary-container'
+                        : 'border-outline-variant bg-surface'
+                    }`}
+                  >
+                    {agreeTerms && (
+                      <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        check
+                      </span>
+                    )}
+                  </button>
+                  <p className="text-label-md text-secondary leading-relaxed">
+                    I agree to Fleet's{' '}
+                    <a href="/terms" target="_blank" className="text-primary font-bold hover:underline">Terms &amp; Conditions</a>
+                    {' '}and{' '}
+                    <a href="/privacy" target="_blank" className="text-primary font-bold hover:underline">Privacy Policy</a>.
+                    {' '}I confirm I'm 18+ and hold a valid driving license.
                   </p>
                 </div>
-                {error && (
-                  <p className="text-error text-label-md bg-red-50 border border-red-200 px-4 py-3 rounded-lg">{error}</p>
-                )}
+
+                {/* Submit */}
                 <button
                   type="submit"
                   id="signup-btn"
-                  disabled={loadingState}
-                  className="w-full h-12 bg-primary-container text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary-container/20 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={signupLoading || !agreeTerms}
+                  className="w-full h-12 bg-primary-container text-white font-bold rounded-full hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
                 >
-                  {loadingState ? 'Creating account...' : 'Create Account'}
+                  {signupLoading ? 'Creating Account...' : 'Create Account →'}
                 </button>
+
+                {/* Divider */}
+                <div className="relative flex items-center gap-4">
+                  <div className="flex-grow h-px bg-outline-variant" />
+                  <span className="text-label-md text-secondary">or sign up with</span>
+                  <div className="flex-grow h-px bg-outline-variant" />
+                </div>
+
+                {/* Google signup */}
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  className="w-full h-12 border-2 border-outline-variant rounded-full font-bold flex items-center justify-center gap-3 hover:border-primary-container hover:bg-primary-fixed transition-all"
+                >
+                  <img
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzTHQA-pNCZsOzWipp1tT5As3nesnTsrV5XYnI6_s_MIqbOmr-ZdlDE6Il6ONK0HlhzO0kKU2yNPCG81joorZv1aC2JLgt30INqTC8N5ZEVXVWPtun3uFtP8yFNLSQbNYEfvbqzt-_2lxPr-dCOCrsAbLC9vzTe7AXixOzOzfZU20b-KW-TyW6RjGnEaJ5LgCouWarXdNAXCLKhrEXwb1AmA3oryaW77MeLAiqVWu5HG9XZHk4uGMj6ZOoIia8TMrQYN7qoK06kbDU"
+                    alt=""
+                    className="w-5 h-5"
+                  />
+                  Continue with Google
+                </button>
+                <p className="text-center text-label-sm text-secondary">
+                  Google sign-up auto-accepts our Terms &amp; Conditions
+                </p>
               </form>
+
+              <p className="text-center text-label-md text-secondary">
+                Already have an account?{' '}
+                <button onClick={() => setActiveTab('signin')} className="text-primary font-bold hover:underline">
+                  Sign In
+                </button>
+              </p>
             </div>
           )}
         </div>

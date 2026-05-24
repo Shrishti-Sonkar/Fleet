@@ -1,12 +1,14 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
+import { ProtectedRoute, VerifiedRoute, AdminRoute } from './components/ProtectedRoute'
 
-// ── Eager import: SplashPage loads instantly (entry screen) ──
+// Eager import: SplashPage loads instantly (entry screen)
 import SplashPage from './pages/SplashPage'
 
-// ── Lazy imports: each page is a separate chunk, loaded on demand ──
+// Lazy imports
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const HomePage = lazy(() => import('./pages/HomePage'))
 const BrowsePage = lazy(() => import('./pages/BrowsePage'))
 const VehicleDetailPage = lazy(() => import('./pages/VehicleDetailPage'))
@@ -14,8 +16,15 @@ const BookingPage = lazy(() => import('./pages/BookingPage'))
 const HostPage = lazy(() => import('./pages/HostPage'))
 const AboutPage = lazy(() => import('./pages/AboutPage'))
 const SupportPage = lazy(() => import('./pages/SupportPage'))
+const VerificationPage = lazy(() => import('./pages/VerificationPage'))
+const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const MyBookingsPage = lazy(() => import('./pages/MyBookingsPage'))
+const AddVehiclePage = lazy(() => import('./pages/AddVehiclePage'))
+const WishlistPage = lazy(() => import('./pages/WishlistPage'))
 
-// ── Loading fallback: branded spinner matching the design system ──
+// Loading fallback
 function PageLoader() {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-container-lowest">
@@ -32,37 +41,54 @@ function PageLoader() {
   )
 }
 
-// New pages
-import VerificationPage from './pages/VerificationPage'
-import OwnerDashboard from './pages/OwnerDashboard'
-import AdminDashboard from './pages/AdminDashboard'
-import ProfilePage from './pages/ProfilePage'
-import MyBookingsPage from './pages/MyBookingsPage'
-import AddVehiclePage from './pages/AddVehiclePage'
-
 export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* ── Public routes ── */}
+          {/* Public routes */}
           <Route path={ROUTES.SPLASH} element={<SplashPage />} />
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+          <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
           <Route path={ROUTES.HOME} element={<HomePage />} />
           <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
           <Route path={ROUTES.VEHICLE_DETAIL()} element={<VehicleDetailPage />} />
-          <Route path={ROUTES.BOOKING()} element={<BookingPage />} />
-          <Route path={ROUTES.HOST} element={<HostPage />} />
           <Route path={ROUTES.ABOUT} element={<AboutPage />} />
           <Route path={ROUTES.SUPPORT} element={<SupportPage />} />
+          <Route path={ROUTES.HOST} element={<HostPage />} />
 
-          {/* ── Future: wrap routes needing auth ──
-          <Route element={<ProtectedRoute />}>
-            <Route path={ROUTES.BOOKING()} element={<BookingPage />} />
-          </Route>
-          */}
+          {/* Protected: Login required */}
+          <Route path={ROUTES.VERIFY} element={
+            <ProtectedRoute><VerificationPage /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.PROFILE} element={
+            <ProtectedRoute><ProfilePage /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.MY_BOOKINGS} element={
+            <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.WISHLIST} element={
+            <ProtectedRoute><WishlistPage /></ProtectedRoute>
+          } />
 
-          {/* ── Catch-all redirect ── */}
+          {/* Protected: KYC verified required */}
+          <Route path={ROUTES.BOOKING()} element={
+            <VerifiedRoute><BookingPage /></VerifiedRoute>
+          } />
+
+          {/* Protected: Owner/Admin only */}
+          <Route path={ROUTES.DASHBOARD} element={
+            <ProtectedRoute><OwnerDashboard /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.ADD_VEHICLE} element={
+            <ProtectedRoute><AddVehiclePage /></ProtectedRoute>
+          } />
+
+          {/* Protected: Admin only */}
+          <Route path={ROUTES.ADMIN} element={
+            <AdminRoute><AdminDashboard /></AdminRoute>
+          } />
+
           <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
         </Routes>
       </Suspense>

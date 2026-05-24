@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
-import { mockVehicles } from '../data/mockVehicles'
-import { ROUTES } from '@/lib/constants'
+import { ROUTES } from '../lib/constants'
 
 export default function VehicleDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const vehicle = mockVehicles.find(v => v.id === id) || mockVehicles[0]
+  
+  const [vehicle, setVehicle] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   const [activeTab, setActiveTab] = useState('Overview')
   const [activeThumb, setActiveThumb] = useState(0)
@@ -17,14 +20,45 @@ export default function VehicleDetailPage() {
   const [helmetAddon, setHelmetAddon] = useState(true)
   const [insuranceAddon, setInsuranceAddon] = useState(false)
 
-  const tabs = ['Overview', 'Specs', `Reviews (${vehicle.reviewCount})`, 'Location']
+  useEffect(() => {
+    const fetchVehicle = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'vehicles', id))
+        if (snap.exists()) {
+          setVehicle({ id: snap.id, ...snap.data() })
+        } else {
+          navigate('/browse')
+        }
+      } catch (err) {
+        console.error('Error fetching vehicle', err)
+        navigate('/browse')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchVehicle()
+  }, [id, navigate])
 
-  const dailyTotal = vehicle.dailyPrice * 2
+  if (loading) {
+    return (
+      <PageLayout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-primary-container border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </PageLayout>
+    )
+  }
+
+  if (!vehicle) return null;
+
+  const tabs = ['Overview', 'Specs', `Reviews (${vehicle.reviewCount || 0})`, 'Location']
+
+  const dailyTotal = (vehicle.dailyPrice || 0) * 2
   const helmetCost = helmetAddon ? 200 : 0
   const insuranceCost = insuranceAddon ? 500 : 0
   const total = dailyTotal + helmetCost + insuranceCost
 
-  const thumbnails = [vehicle.imageUrl, vehicle.imageUrl, vehicle.imageUrl, vehicle.imageUrl]
+  const thumbnails = [vehicle.imageUrl, vehicle.imageUrl, vehicle.imageUrl, vehicle.imageUrl].filter(Boolean)
 
   return (
     <PageLayout>

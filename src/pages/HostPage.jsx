@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { useAuth } from '../context/AuthContext'
+import toast from 'react-hot-toast'
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 
@@ -11,6 +15,7 @@ const vehicleTypes = [
 ]
 
 const wizardSteps = ['Details', 'Pricing', 'Features', 'Review']
+const availableFeatures = ['ABS', 'GPS', 'Bluetooth', 'USB Charger', 'Keyless Entry', 'Helmet Included', 'Cruise Control']
 
 const faqItems = [
   {
@@ -23,19 +28,87 @@ const faqItems = [
 ]
 
 export default function HostPage() {
+  const { user, userDoc } = useAuth()
+  const navigate = useNavigate()
+
   const [activeVehicleType, setActiveVehicleType] = useState('suv')
   const [daysPerMonth, setDaysPerMonth] = useState(15)
   const [wizardStep, setWizardStep] = useState(0)
   const [openFaq, setOpenFaq] = useState(0)
+  const [saving, setSaving] = useState(false)
 
-  // Form state
+  // Step 1 Form state
   const [vehicleBrand, setVehicleBrand] = useState('')
   const [regNo, setRegNo] = useState('')
   const [fuelType, setFuelType] = useState('Diesel')
   const [city, setCity] = useState('')
+  const [vehicleCategory, setVehicleCategory] = useState('SUV')
+
+  // Step 2 Form state
+  const [cc, setCc] = useState('')
+  const [seats, setSeats] = useState('5')
+  const [mileage, setMileage] = useState('')
+  const [dailyPrice, setDailyPrice] = useState('')
+  const [securityDeposit, setSecurityDeposit] = useState('5000')
+
+  // Step 3 Form state
+  const [description, setDescription] = useState('')
+  const [features, setFeatures] = useState([])
+  const [imageUrl, setImageUrl] = useState('')
 
   const selectedType = vehicleTypes.find(t => t.id === activeVehicleType)
   const estimatedEarnings = selectedType ? selectedType.rate * daysPerMonth : 0
+
+  const toggleFeature = (feat) => {
+    setFeatures(prev => prev.includes(feat) ? prev.filter(f => f !== feat) : [...prev, feat])
+  }
+
+  const handleSubmit = async () => {
+    if (!user) {
+      toast.error('You must be logged in to list a vehicle.')
+      return
+    }
+    if (!vehicleBrand || !dailyPrice || !city) {
+      toast.error('Please complete all required fields.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const typeMap = { 'SUV': 'Car', 'Sedan': 'Car', 'Hatchback': 'Car', 'Bike': 'Bike', 'Scooter': 'Scooter' }
+      const finalType = typeMap[vehicleCategory] || 'Car'
+
+      await addDoc(collection(db, 'vehicles'), {
+        name: vehicleBrand,
+        regNo,
+        type: finalType,
+        category: vehicleCategory,
+        fuelType,
+        city,
+        cc,
+        seats: Number(seats),
+        mileage,
+        dailyPrice: Number(dailyPrice),
+        securityDeposit: Number(securityDeposit),
+        description,
+        features,
+        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?q=80&w=2070&auto=format&fit=crop',
+        status: 'pending',
+        available: true,
+        ownerId: user.uid,
+        hostName: userDoc?.name || user.displayName || 'New Host',
+        hostRating: 5.0,
+        hostReviews: 0,
+        createdAt: serverTimestamp()
+      })
+      toast.success('Vehicle submitted successfully! Awaiting approval.')
+      navigate('/dashboard')
+    } catch (err) {
+      toast.error('Failed to submit listing: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <PageLayout>
@@ -203,9 +276,8 @@ export default function HostPage() {
                     <p className="text-secondary mb-8">The more detail you provide, the faster travelers will book your vehicle.</p>
                     <form className="space-y-6">
                       <div>
-                        <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Vehicle Brand & Model</label>
+                        <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Vehicle Brand & Model <span className="text-error">*</span></label>
                         <input
-                          id="vehicle-brand"
                           className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
                           placeholder="e.g. Toyota Fortuner 2023"
                           type="text"
@@ -215,20 +287,22 @@ export default function HostPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Registration No.</label>
-                          <input
-                            id="reg-no"
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Category</label>
+                          <select
                             className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
-                            placeholder="UK 07 XX 0000"
-                            type="text"
-                            value={regNo}
-                            onChange={e => setRegNo(e.target.value)}
-                          />
+                            value={vehicleCategory}
+                            onChange={e => setVehicleCategory(e.target.value)}
+                          >
+                            <option>SUV</option>
+                            <option>Sedan</option>
+                            <option>Hatchback</option>
+                            <option>Bike</option>
+                            <option>Scooter</option>
+                          </select>
                         </div>
                         <div>
                           <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Fuel Type</label>
                           <select
-                            id="fuel-select"
                             className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
                             value={fuelType}
                             onChange={e => setFuelType(e.target.value)}
@@ -239,37 +313,209 @@ export default function HostPage() {
                           </select>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">City of Operation</label>
-                        <input
-                          id="city-input"
-                          className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
-                          placeholder="Dehradun"
-                          type="text"
-                          value={city}
-                          onChange={e => setCity(e.target.value)}
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">City <span className="text-error">*</span></label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="Dehradun"
+                            type="text"
+                            value={city}
+                            onChange={e => setCity(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Registration No.</label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="UK 07 XX 0000"
+                            type="text"
+                            value={regNo}
+                            onChange={e => setRegNo(e.target.value)}
+                          />
+                        </div>
                       </div>
                     </form>
                   </div>
-                  {/* Photo upload */}
-                  <div className="bg-surface p-8 rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center text-center">
-                    <div className="w-20 h-20 bg-surface-container-high rounded-full flex items-center justify-center mb-4">
-                      <span className="material-symbols-outlined text-4xl text-on-surface-variant">add_a_photo</span>
-                    </div>
-                    <h4 className="font-bold text-on-surface mb-2">Upload Vehicle Photos</h4>
-                    <p className="text-sm text-secondary mb-6">High-resolution exterior and interior shots (Min. 5 photos)</p>
-                    <button className="h-10 px-6 bg-white border border-outline text-on-surface font-semibold rounded-lg hover:bg-surface-container transition-all">
-                      Browse Files
-                    </button>
+                  <div className="bg-surface p-8 rounded-xl border border-outline-variant flex flex-col justify-center text-center">
+                    <span className="material-symbols-outlined text-[64px] text-primary/20 mb-4">directions_car</span>
+                    <h4 className="font-bold mb-2">Step 1: Basics</h4>
+                    <p className="text-secondary text-sm">Add the fundamental details of your vehicle so renters know exactly what they are booking.</p>
                   </div>
                 </div>
               )}
-              {wizardStep !== 0 && (
-                <div className="text-center py-12 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-[48px] block mb-4">construction</span>
-                  <p className="font-headline-sm text-headline-sm">Step {wizardStep + 1}: {wizardSteps[wizardStep]}</p>
-                  <p className="text-body-lg mt-2">Coming soon in next iteration.</p>
+
+              {wizardStep === 1 && (
+                <div className="grid md:grid-cols-2 gap-12">
+                  <div>
+                    <h3 className="font-headline-sm text-headline-sm text-on-surface mb-6">Pricing & Specifications</h3>
+                    <form className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Daily Price (₹) <span className="text-error">*</span></label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="2500"
+                            type="number"
+                            value={dailyPrice}
+                            onChange={e => setDailyPrice(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Security Deposit (₹)</label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="5000"
+                            type="number"
+                            value={securityDeposit}
+                            onChange={e => setSecurityDeposit(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Engine/CC</label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="e.g. 1998cc"
+                            type="text"
+                            value={cc}
+                            onChange={e => setCc(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Seats</label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="5"
+                            type="number"
+                            value={seats}
+                            onChange={e => setSeats(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Mileage</label>
+                          <input
+                            className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                            placeholder="15 kmpl"
+                            type="text"
+                            value={mileage}
+                            onChange={e => setMileage(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                  <div className="bg-surface p-8 rounded-xl border border-outline-variant flex flex-col justify-center text-center">
+                    <span className="material-symbols-outlined text-[64px] text-primary/20 mb-4">payments</span>
+                    <h4 className="font-bold mb-2">Competitive Pricing</h4>
+                    <p className="text-secondary text-sm">Vehicles priced within 10% of the market average are booked 3x more often.</p>
+                  </div>
+                </div>
+              )}
+
+              {wizardStep === 2 && (
+                <div className="grid md:grid-cols-2 gap-12">
+                  <div>
+                    <h3 className="font-headline-sm text-headline-sm text-on-surface mb-6">Features & Photos</h3>
+                    <form className="space-y-6">
+                      <div>
+                        <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Description</label>
+                        <textarea
+                          className="w-full h-24 bg-surface border border-outline-variant rounded-lg px-4 py-3 focus:outline-none focus:border-primary transition-all resize-none"
+                          placeholder="Describe your vehicle's condition and any special instructions..."
+                          value={description}
+                          onChange={e => setDescription(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-label-md font-label-md text-on-surface-variant mb-3 uppercase">Key Features</label>
+                        <div className="flex flex-wrap gap-3">
+                          {availableFeatures.map(feat => (
+                            <div
+                              key={feat}
+                              onClick={() => toggleFeature(feat)}
+                              className={`px-4 py-2 rounded-full border cursor-pointer text-sm font-medium transition-all ${
+                                features.includes(feat)
+                                  ? 'bg-primary-fixed border-primary text-on-primary-fixed'
+                                  : 'border-outline-variant hover:border-primary/50'
+                              }`}
+                            >
+                              {feat}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-label-md font-label-md text-on-surface-variant mb-2 uppercase">Image URL</label>
+                        <input
+                          className="w-full h-12 bg-surface border border-outline-variant rounded-lg px-4 focus:outline-none focus:border-primary transition-all"
+                          placeholder="https://example.com/car-image.jpg"
+                          type="text"
+                          value={imageUrl}
+                          onChange={e => setImageUrl(e.target.value)}
+                        />
+                        <p className="text-xs text-secondary mt-2">Leave blank to use a placeholder image.</p>
+                      </div>
+                    </form>
+                  </div>
+                  <div className="bg-surface p-8 rounded-xl border border-outline-variant flex flex-col justify-center text-center">
+                    <div className="w-full h-32 bg-surface-container rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="material-symbols-outlined text-4xl text-secondary">image</span>
+                      )}
+                    </div>
+                    <h4 className="font-bold mb-2">Image Preview</h4>
+                    <p className="text-secondary text-sm">High-quality images significantly increase your booking rate.</p>
+                  </div>
+                </div>
+              )}
+
+              {wizardStep === 3 && (
+                <div>
+                  <h3 className="font-headline-sm text-headline-sm text-on-surface mb-6">Review & Submit</h3>
+                  <div className="bg-surface border border-outline-variant rounded-xl p-8 max-w-3xl mx-auto">
+                    <div className="flex items-center gap-6 mb-8 border-b border-outline-variant pb-6">
+                      <div className="w-24 h-24 bg-surface-container rounded-lg overflow-hidden shrink-0">
+                        <img
+                          src={imageUrl || 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?q=80&w=2070&auto=format&fit=crop'}
+                          alt="Vehicle"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <h4 className="font-headline-sm">{vehicleBrand || 'Unnamed Vehicle'}</h4>
+                        <p className="text-secondary">{vehicleCategory} • {fuelType}</p>
+                        <p className="text-primary font-bold mt-1">₹{dailyPrice || '0'}/day</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                      <div>
+                        <p className="text-xs text-secondary uppercase">City</p>
+                        <p className="font-bold">{city || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-secondary uppercase">Reg No</p>
+                        <p className="font-bold">{regNo || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-secondary uppercase">Engine</p>
+                        <p className="font-bold">{cc || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-secondary uppercase">Security Deposit</p>
+                        <p className="font-bold">₹{securityDeposit || '0'}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-yellow-50 text-yellow-800 p-4 rounded-lg flex gap-3 text-sm">
+                      <span className="material-symbols-outlined shrink-0 text-yellow-600">info</span>
+                      <p>By submitting this listing, you agree to our Host Terms of Service. Your vehicle will be reviewed by our team before becoming active.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -282,17 +528,22 @@ export default function HostPage() {
                     <span className="material-symbols-outlined">arrow_back</span> Back
                   </button>
                 )}
-                <button
-                  id="next-step-btn"
-                  onClick={() => setWizardStep(s => Math.min(s + 1, wizardSteps.length - 1))}
-                  className="ml-auto h-12 px-10 bg-primary-container text-white font-bold rounded-full flex items-center gap-2 hover:opacity-90 active:scale-95 duration-150"
-                >
-                  {wizardStep < wizardSteps.length - 1 ? (
-                    <>Next Step <span className="material-symbols-outlined">arrow_forward</span></>
-                  ) : (
-                    <>Submit Listing <span className="material-symbols-outlined">check</span></>
-                  )}
-                </button>
+                {wizardStep < wizardSteps.length - 1 ? (
+                  <button
+                    onClick={() => setWizardStep(s => Math.min(s + 1, wizardSteps.length - 1))}
+                    className="ml-auto h-12 px-10 bg-primary-container text-white font-bold rounded-full flex items-center gap-2 hover:opacity-90 active:scale-95 duration-150"
+                  >
+                    Next Step <span className="material-symbols-outlined">arrow_forward</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={saving}
+                    className="ml-auto h-12 px-10 bg-primary text-white font-bold rounded-full flex items-center gap-2 hover:opacity-90 active:scale-95 duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {saving ? 'Submitting...' : <>Submit Listing <span className="material-symbols-outlined">check</span></>}
+                  </button>
+                )}
               </div>
             </div>
           </div>

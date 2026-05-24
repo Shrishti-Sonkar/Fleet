@@ -1,30 +1,46 @@
-import { Link } from 'react-router-dom'
 import PageLayout from '@/components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 
 import HowItWorks from '../components/sections/HowItWorks'
 import PopularVehicles from '../components/sections/PopularVehicles'
-import VehicleCard from '../components/sections/VehicleCard'
-import { mockVehicles, mockCities } from '../data/mockVehicles'
+import PromoBanner from '../components/sections/PromoBanner'
+import ActiveBookingCard from '../components/sections/ActiveBookingCard'
+import { mockCities } from '../data/mockVehicles'
+import { useVehicles } from '../hooks/useVehicles'
 import { ROUTES } from '@/lib/constants'
 import HeroSection from '@/components/sections/HeroSection'
 
-const featuredVehicles = mockVehicles.slice(0, 4)
-
 export default function HomePage() {
+  const { vehicles } = useVehicles()
+  const featuredVehicles = vehicles.slice(0, 4)
+
   return (
     <PageLayout>
       <HeroSection />
-      {/* ── Section 2: How it works ── */}
+
+      {/* Active Booking Card (shows only when user has an active/pending booking) */}
+      <ActiveBookingCard />
+
+      {/* Promo Banner */}
+      <section className="py-6 bg-surface">
+        <div className="max-w-screen-2xl mx-auto px-gutter">
+          <PromoBanner />
+        </div>
+      </section>
+
+      {/* How it works */}
       <HowItWorks />
 
-      {/* ── Section 3: Popular Vehicles ── */}
+      {/* Popular Vehicles */}
       <PopularVehicles vehicles={featuredVehicles} />
 
-      {/* ── Section 4: Cities (Dark) ── */}
+      {/* Cities (Dark) */}
       <section className="py-section-padding-lg bg-[#111111] text-white">
         <div className="max-w-screen-2xl mx-auto px-gutter">
           <div className="flex flex-col items-center text-center mb-16">
+            <span className="inline-block px-4 py-1.5 bg-white/10 text-white rounded-full font-label-md text-label-md font-bold tracking-wide uppercase mb-4">
+              Explore Uttarakhand
+            </span>
             <h2 className="font-headline-md text-headline-md mb-4">Pick up from the Peaks</h2>
             <p className="text-on-surface-variant opacity-60 font-body-lg text-body-lg max-w-2xl">
               Currently dominating the roads of Uttarakhand. Coming soon to other hill stations across India.
@@ -49,7 +65,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Section 5: Why Fleet ── */}
+      {/* Why Fleet */}
       <section className="py-section-padding-lg bg-surface-container-lowest">
         <div className="max-w-screen-2xl mx-auto px-gutter grid md:grid-cols-2 gap-16 items-center">
           <div>
@@ -59,10 +75,10 @@ export default function HomePage() {
             </p>
             <div className="grid grid-cols-2 gap-8">
               {[
-                { icon: 'verified', title: 'Zero Deposit', desc: 'Rent without the heavy upfront security deposits.' },
-                { icon: 'support_agent', title: '24/7 Roadside', desc: 'Stuck on a hill? Our support team is just a call away.' },
-                { icon: 'payments', title: 'Flexible Pricing', desc: 'Hourly, daily, and weekly rates tailored for you.' },
-                { icon: 'eco', title: 'Eco-Friendly', desc: 'The largest fleet of electric scooters in the North.' },
+                { icon: 'verified',       title: 'Zero Deposit',   desc: 'Rent without the heavy upfront security deposits.'           },
+                { icon: 'support_agent',  title: '24/7 Roadside',  desc: 'Stuck on a hill? Our support team is just a call away.'     },
+                { icon: 'payments',       title: 'Flexible Pricing',desc: 'Hourly, daily, and weekly rates tailored for you.'         },
+                { icon: 'eco',            title: 'Eco-Friendly',   desc: 'The largest fleet of electric scooters in the North.'       },
               ].map(item => (
                 <div key={item.title} className="space-y-3">
                   <span className="material-symbols-outlined text-primary text-[32px]">{item.icon}</span>
@@ -93,7 +109,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Section 6: Social Proof ── */}
+      {/* Social Proof */}
       <section className="py-section-padding-lg bg-surface">
         <div className="max-w-screen-2xl mx-auto px-gutter">
           <div className="grid md:grid-cols-12 gap-12 items-center">
@@ -106,7 +122,7 @@ export default function HomePage() {
                       <span key={i} className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>{s}</span>
                     ))}
                   </div>
-                  <p className="text-on-surface-variant">Average rating from 12,000+ reviews across App Store & Play Store.</p>
+                  <p className="text-on-surface-variant">Average rating from 12,000+ reviews across App Store &amp; Play Store.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
@@ -146,7 +162,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Section 7: Host Banner ── */}
+      {/* Host Banner */}
       <section className="py-16">
         <div className="max-w-screen-2xl mx-auto px-gutter">
           <div className="bg-primary-container rounded-[40px] p-12 md:p-20 relative overflow-hidden text-white flex flex-col md:flex-row items-center justify-between gap-12">

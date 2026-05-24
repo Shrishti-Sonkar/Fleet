@@ -7,6 +7,11 @@ import {
   GoogleAuthProvider,
   signOut,
   sendPasswordResetEmail,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
@@ -18,11 +23,31 @@ export function AuthProvider({ children }) {
   const [userDoc, setUserDoc] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Helper to fetch user doc and apply self-healing migrations (like adding tokens)
+  const fetchAndMigrateUserDoc = async (uid) => {
+    const userRef = doc(db, 'users', uid)
+    const snap = await getDoc(userRef)
+    if (snap.exists()) {
+      const data = snap.data()
+      if (data.tokens === undefined) {
+        // Automatically migrate/initialize tokens for existing users
+        const updatedFields = {
+          tokens: 10,
+          tokensUsed: 0
+        }
+        await setDoc(userRef, updatedFields, { merge: true })
+        return { ...data, ...updatedFields }
+      }
+      return data
+    }
+    return null
+  }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
-        setUserDoc(snap.exists() ? snap.data() : null)
+        const uDoc = await fetchAndMigrateUserDoc(firebaseUser.uid)
+        setUserDoc(uDoc)
         setUser(firebaseUser)
       } else {
         setUser(null)
@@ -33,11 +58,11 @@ export function AuthProvider({ children }) {
     return unsub
   }, [])
 
-  // Refresh userDoc (call after KYC approval)
+  // Refresh userDoc (call after KYC approval or profile update)
   const refreshUserDoc = async () => {
     if (!user) return
-    const snap = await getDoc(doc(db, 'users', user.uid))
-    setUserDoc(snap.exists() ? snap.data() : null)
+    const uDoc = await fetchAndMigrateUserDoc(user.uid)
+    setUserDoc(uDoc)
   }
 
   const signup = async (email, password, name, phone) => {
@@ -51,14 +76,22 @@ export function AuthProvider({ children }) {
       kycStatus: 'not_submitted',
       isVerified: false,
       verifiedBadge: false,
+      tokens: 10,       // New users get 10 free tokens (1 token = 1 hr)
+      tokensUsed: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
     return cred
   }
 
-  const signin = (email, password) =>
-    signInWithEmailAndPassword(auth, email, password)
+  // Feature 2: Remember Me — use localStorage or sessionStorage persistence
+  const signin = async (email, password, rememberMe = true) => {
+    await setPersistence(
+      auth,
+      rememberMe ? browserLocalPersistence : browserSessionPersistence
+    )
+    return signInWithEmailAndPassword(auth, email, password)
+  }
 
   const googleSignin = async () => {
     const provider = new GoogleAuthProvider()
@@ -74,6 +107,8 @@ export function AuthProvider({ children }) {
         kycStatus: 'not_submitted',
         isVerified: false,
         verifiedBadge: false,
+        tokens: 10,
+        tokensUsed: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
@@ -85,6 +120,69 @@ export function AuthProvider({ children }) {
 
   const resetPassword = (email) => sendPasswordResetEmail(auth, email)
 
+  // Feature 1: Phone OTP — Step 1: send OTP
+  const sendOTP = async (phoneNumber) => {
+    try {
+      // Clean up any stale verifier
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear()
+        window.recaptchaVerifier = null
+      }
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container',
+        {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            window.recaptchaVerifier = null
+          },
+        }
+      )
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        phoneNumber,
+        window.recaptchaVerifier
+      )
+      window.confirmationResult = confirmationResult
+      return { success: true }
+    } catch (err) {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear()
+        window.recaptchaVerifier = null
+      }
+      throw err
+    }
+  }
+
+  // Feature 1: Phone OTP — Step 2: verify OTP
+  const verifyOTP = async (otp) => {
+    if (!window.confirmationResult) {
+      throw new Error('No OTP sent. Please request OTP first.')
+    }
+    const cred = await window.confirmationResult.confirm(otp)
+
+    // Create Firestore user doc if this is a new phone-auth user
+    const snap = await getDoc(doc(db, 'users', cred.user.uid))
+    if (!snap.exists()) {
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        uid: cred.user.uid,
+        name: '',
+        email: '',
+        phone: cred.user.phoneNumber,
+        role: 'renter',
+        kycStatus: 'not_submitted',
+        isVerified: false,
+        verifiedBadge: false,
+        tokens: 10,
+        tokensUsed: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    }
+    return cred
+  }
+
   const isAdmin = () => userDoc?.role === 'admin'
   const isOwner = () => userDoc?.role === 'owner' || userDoc?.role === 'admin'
   const isKycApproved = () => userDoc?.kycStatus === 'approved'
@@ -93,6 +191,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, userDoc, loading,
       signup, signin, googleSignin, logout, resetPassword,
+      sendOTP, verifyOTP,
       refreshUserDoc, isAdmin, isOwner, isKycApproved,
     }}>
       {!loading && children}

@@ -3,6 +3,7 @@ import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import FilterBar from '../components/sections/FilterBar'
 import VehicleCard from '../components/sections/VehicleCard'
+import PriceModeToggle from '../components/sections/PriceModeToggle'
 import { useVehicles } from '../hooks/useVehicles'
 
 const engineFilters = ['100cc+', '350cc+', '500cc+']
@@ -130,7 +131,8 @@ export default function BrowsePage() {
                 Showing {vehicles.length} results in {locationQuery || 'Dehradun'}
               </p>
             </div>
-            <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
+              <PriceModeToggle />
               <span className="text-label-md font-label-md font-bold text-on-surface-variant whitespace-nowrap">Sort by:</span>
               <select
                 id="sort-select"
@@ -147,7 +149,7 @@ export default function BrowsePage() {
           </header>
 
           {/* Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-visible">
             {vehicles.map(v => (
               <VehicleCard key={v.id} vehicle={v} />
             ))}
