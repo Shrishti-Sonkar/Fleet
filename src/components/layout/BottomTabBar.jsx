@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 const tabs = [
-  { to: '/browse', icon: 'explore', label: 'Browse' },
-  { to: '/', icon: 'home', label: 'Home' },
-  { to: '/host', icon: 'directions_car', label: 'Host' },
-  { to: '/login', icon: 'account_circle', label: 'Profile' },
+  { to: ROUTES.BROWSE, icon: 'explore', label: 'Browse' },
+  { to: ROUTES.HOME, icon: 'home', label: 'Home' },
+  { to: ROUTES.HOST, icon: 'directions_car', label: 'Host' },
+  { to: ROUTES.LOGIN, icon: 'account_circle', label: 'Profile' },
 ]
 
 export default function BottomTabBar() {

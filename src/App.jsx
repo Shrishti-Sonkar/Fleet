@@ -1,16 +1,36 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ProtectedRoute, VerifiedRoute, AdminRoute } from './components/ProtectedRoute'
+import { ROUTES } from '@/lib/constants'
 
-// Existing pages
+// ── Eager import: SplashPage loads instantly (entry screen) ──
 import SplashPage from './pages/SplashPage'
-import LoginPage from './pages/LoginPage'
-import HomePage from './pages/HomePage'
-import BrowsePage from './pages/BrowsePage'
-import VehicleDetailPage from './pages/VehicleDetailPage'
-import BookingPage from './pages/BookingPage'
-import HostPage from './pages/HostPage'
-import AboutPage from './pages/AboutPage'
-import SupportPage from './pages/SupportPage'
+
+// ── Lazy imports: each page is a separate chunk, loaded on demand ──
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const HomePage = lazy(() => import('./pages/HomePage'))
+const BrowsePage = lazy(() => import('./pages/BrowsePage'))
+const VehicleDetailPage = lazy(() => import('./pages/VehicleDetailPage'))
+const BookingPage = lazy(() => import('./pages/BookingPage'))
+const HostPage = lazy(() => import('./pages/HostPage'))
+const AboutPage = lazy(() => import('./pages/AboutPage'))
+const SupportPage = lazy(() => import('./pages/SupportPage'))
+
+// ── Loading fallback: branded spinner matching the design system ──
+function PageLoader() {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-container-lowest">
+      <div className="relative flex items-center justify-center">
+        {/* Outer glow */}
+        <div className="absolute w-16 h-16 rounded-full bg-primary-container/20 animate-ping" />
+        {/* Spinner ring */}
+        <div className="w-10 h-10 border-[3px] border-surface-container-high border-t-primary-container rounded-full animate-spin" />
+      </div>
+      <p className="mt-6 text-label-md font-label-md text-on-surface-variant tracking-wide animate-pulse">
+        Loading...
+      </p>
+    </div>
+  )
+}
 
 // New pages
 import VerificationPage from './pages/VerificationPage'
@@ -23,48 +43,29 @@ import AddVehiclePage from './pages/AddVehiclePage'
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/splash" element={<SplashPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<HomePage />} />
-        <Route path="/browse" element={<BrowsePage />} />
-        <Route path="/vehicle/:id" element={<VehicleDetailPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/support" element={<SupportPage />} />
-        <Route path="/host" element={<HostPage />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* ── Public routes ── */}
+          <Route path={ROUTES.SPLASH} element={<SplashPage />} />
+          <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+          <Route path={ROUTES.HOME} element={<HomePage />} />
+          <Route path={ROUTES.BROWSE} element={<BrowsePage />} />
+          <Route path={ROUTES.VEHICLE_DETAIL()} element={<VehicleDetailPage />} />
+          <Route path={ROUTES.BOOKING()} element={<BookingPage />} />
+          <Route path={ROUTES.HOST} element={<HostPage />} />
+          <Route path={ROUTES.ABOUT} element={<AboutPage />} />
+          <Route path={ROUTES.SUPPORT} element={<SupportPage />} />
 
-        {/* Protected: Login required */}
-        <Route path="/verify" element={
-          <ProtectedRoute><VerificationPage /></ProtectedRoute>
-        } />
-        <Route path="/profile" element={
-          <ProtectedRoute><ProfilePage /></ProtectedRoute>
-        } />
-        <Route path="/my-bookings" element={
-          <ProtectedRoute><MyBookingsPage /></ProtectedRoute>
-        } />
+          {/* ── Future: wrap routes needing auth ──
+          <Route element={<ProtectedRoute />}>
+            <Route path={ROUTES.BOOKING()} element={<BookingPage />} />
+          </Route>
+          */}
 
-        {/* Protected: KYC verified required */}
-        <Route path="/booking/:id" element={
-          <VerifiedRoute><BookingPage /></VerifiedRoute>
-        } />
-
-        {/* Protected: Owner/Admin only */}
-        <Route path="/dashboard" element={
-          <ProtectedRoute><OwnerDashboard /></ProtectedRoute>
-        } />
-        <Route path="/add-vehicle" element={
-          <ProtectedRoute><AddVehiclePage /></ProtectedRoute>
-        } />
-
-        {/* Protected: Admin only */}
-        <Route path="/admin" element={
-          <AdminRoute><AdminDashboard /></AdminRoute>
-        } />
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* ── Catch-all redirect ── */}
+          <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

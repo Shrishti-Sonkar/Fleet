@@ -1,14 +1,15 @@
 import { Link, useLocation } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 export default function TopNavBar() {
   const location = useLocation()
   const isActive = (path) => location.pathname === path
 
   const navLinks = [
-    { to: '/browse', label: 'Browse' },
-    { to: '/host', label: 'List Vehicle' },
-    { to: '/about', label: 'About' },
-    { to: '/support', label: 'Support' },
+    { to: ROUTES.BROWSE, label: 'Browse' },
+    { to: ROUTES.HOST, label: 'List Vehicle' },
+    { to: ROUTES.ABOUT, label: 'About' },
+    { to: ROUTES.SUPPORT, label: 'Support' },
   ]
 
   return (
@@ -16,7 +17,7 @@ export default function TopNavBar() {
       <nav className="flex items-center justify-between px-gutter max-w-screen-2xl mx-auto h-full">
         {/* Logo */}
         <div className="flex items-center gap-12">
-          <Link to="/" className="font-headline-sm text-headline-sm font-black text-primary">
+          <Link to={ROUTES.HOME} className="font-headline-sm text-headline-sm font-black text-primary">
             Fleet
           </Link>
           {/* Desktop nav links */}
@@ -41,13 +42,13 @@ export default function TopNavBar() {
         <div className="flex items-center gap-4">
           <span className="material-symbols-outlined text-on-surface-variant cursor-pointer hidden md:block">language</span>
           <Link
-            to="/login"
+            to={ROUTES.LOGIN}
             className="font-medium text-on-surface hover:text-primary transition-colors font-body-lg text-body-lg"
           >
             Sign In
           </Link>
           <Link
-            to="/browse"
+            to={ROUTES.BROWSE}
             className="bg-primary-container text-white px-6 py-2 rounded-full font-bold scale-95 duration-150 active:opacity-80 transition-all font-body-lg text-body-lg hover:opacity-90"
           >
             Rent Now

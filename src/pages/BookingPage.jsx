@@ -7,6 +7,8 @@ import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import BookingSteps from '../components/sections/BookingSteps'
 import { useBooking } from '../hooks/useBooking'
+import { mockVehicles } from '../data/mockVehicles'
+import { ROUTES } from '@/lib/constants'
 
 const paymentMethods = [
   { id: 'upi', icon: 'account_balance_wallet', label: 'UPI Payment', sub: 'Google Pay, PhonePe, Paytm' },
@@ -105,12 +107,13 @@ export default function BookingPage() {
           </p>
           <div className="space-x-4">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(ROUTES.HOME)}
               className="h-12 px-8 bg-on-surface text-white font-bold rounded-lg hover:opacity-90 active:scale-95 transition-all"
             >
               Go Home
             </button>
             <Link
+              to={ROUTES.BROWSE}
               to="/my-bookings"
               className="inline-flex h-12 px-8 border-2 border-primary text-primary font-bold rounded-lg hover:bg-primary-fixed/20 active:scale-95 transition-all items-center"
             >
@@ -128,7 +131,7 @@ export default function BookingPage() {
       <header className="fixed top-0 w-full h-[68px] bg-surface-container-lowest border-b border-outline-variant z-50">
         <div className="flex items-center justify-between px-gutter max-w-screen-2xl mx-auto h-full">
           <div className="flex items-center gap-8">
-            <Link to="/" className="font-headline-sm text-headline-sm font-black text-primary">Fleet</Link>
+            <Link to={ROUTES.HOME} className="font-headline-sm text-headline-sm font-black text-primary">Fleet</Link>
           </div>
           <div className="flex items-center gap-base">
             <span className="text-on-surface-variant font-label-md">Secure Checkout</span>

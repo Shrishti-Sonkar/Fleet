@@ -1,6 +1,7 @@
 import PageLayout from '../components/layout/PageLayout'
 import Footer from '../components/layout/Footer'
 import { Link } from 'react-router-dom'
+import { ROUTES } from '@/lib/constants'
 
 export default function AboutPage() {
   const stats = [
@@ -28,7 +29,7 @@ export default function AboutPage() {
           <p className="font-body-lg text-body-lg opacity-90 max-w-2xl mx-auto mb-10">
             Fleet started in 2022 with a simple belief: every traveler deserves a world-class experience when exploring India's incredible mountain landscapes.
           </p>
-          <Link to="/browse" className="inline-block bg-white text-primary px-10 py-4 rounded-full font-black hover:scale-105 transition-transform">
+          <Link to={ROUTES.BROWSE} className="inline-block bg-white text-primary px-10 py-4 rounded-full font-black hover:scale-105 transition-transform">
             Start Exploring
           </Link>
         </div>

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import toast from 'react-hot-toast'
+import { ROUTES } from '@/lib/constants'
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState('signin')
@@ -18,24 +17,7 @@ export default function LoginPage() {
 
   const handleSignIn = async (e) => {
     e.preventDefault()
-    setError('')
-    setLoadingState(true)
-    try {
-      await signin(email, password)
-      toast.success('Welcome back to Fleet!')
-      navigate('/')
-    } catch (err) {
-      const msg =
-        err.code === 'auth/invalid-credential'
-          ? 'Invalid email or password'
-          : err.code === 'auth/too-many-requests'
-          ? 'Too many attempts. Try again later.'
-          : 'Login failed. Please try again.'
-      setError(msg)
-      toast.error(msg)
-    } finally {
-      setLoadingState(false)
-    }
+    navigate(ROUTES.HOME)
   }
 
   const handleSignUp = async (e) => {
@@ -81,7 +63,7 @@ export default function LoginPage() {
         <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Welcome aboard!</h3>
         <p className="text-secondary max-w-sm mb-10">Your account has been successfully created. Let's get you on the road.</p>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(ROUTES.HOME)}
           className="w-full max-w-xs h-12 bg-primary-container text-white font-bold rounded-xl active:scale-95 transition-all"
         >
           Start Browsing Vehicles
