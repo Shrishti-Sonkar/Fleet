@@ -17,6 +17,7 @@ export const ROUTES = {
 
   VEHICLE_DETAIL: (id = ':id') => `/vehicle/${id}`,
   BOOKING: (id = ':id') => `/booking/${id}`,
+  ACTIVE_RIDE: (id = ':bookingId') => `/ride/${id}`,
 }
 
 export const APP_CONFIG = {
@@ -39,6 +40,7 @@ export const VEHICLE_CATEGORIES = [
 export const RENTAL_TYPES = {
   HOURLY: 'hourly',
   DAILY: 'daily',
+  MONTHLY: 'monthly',
 }
 
 export const BOOKING_STATUS = {

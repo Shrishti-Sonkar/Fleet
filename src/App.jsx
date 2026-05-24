@@ -23,6 +23,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const MyBookingsPage = lazy(() => import('./pages/MyBookingsPage'))
 const AddVehiclePage = lazy(() => import('./pages/AddVehiclePage'))
 const WishlistPage = lazy(() => import('./pages/WishlistPage'))
+const ActiveRidePage = lazy(() => import('./pages/ActiveRidePage'))
 
 // Loading fallback
 function PageLoader() {
@@ -74,6 +75,9 @@ export default function App() {
           {/* Protected: KYC verified required */}
           <Route path={ROUTES.BOOKING()} element={
             <VerifiedRoute><BookingPage /></VerifiedRoute>
+          } />
+          <Route path={ROUTES.ACTIVE_RIDE()} element={
+            <ProtectedRoute><ActiveRidePage /></ProtectedRoute>
           } />
 
           {/* Protected: Owner/Admin only */}

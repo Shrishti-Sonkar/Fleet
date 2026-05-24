@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import RideOTPCard from '../components/RideOTPCard'
 
 const tabs = ['Overview', 'My Listings', 'Booking Requests', 'Earnings']
 
@@ -50,10 +51,20 @@ export default function OwnerDashboard() {
     }
   }, [user])
 
+  const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString()
+
   const approveBooking = async (bookingDocId, vehicleId) => {
-    await updateDoc(doc(db, 'bookings', bookingDocId), { status: 'approved' })
+    const startOTP = generateOTP()
+    const dropoffPIN = generateOTP()
+    await updateDoc(doc(db, 'bookings', bookingDocId), {
+      status: 'approved',
+      startOTP,
+      dropoffPIN,
+      otpExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      approvedAt: new Date(),
+    })
     await updateDoc(doc(db, 'vehicles', vehicleId), { available: false })
-    toast.success('Booking approved!')
+    toast.success('Booking approved! OTP generated.')
   }
 
   const rejectBooking = async (bookingDocId, vehicleId) => {
@@ -241,6 +252,11 @@ export default function OwnerDashboard() {
                       </div>
                     )}
                   </div>
+
+                  {/* OTP Card for approved/active bookings */}
+                  {(b.status === 'approved' || b.status === 'active') && (
+                    <RideOTPCard booking={b} />
+                  )}
                 </div>
               ))
             )}

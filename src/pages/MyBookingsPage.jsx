@@ -3,7 +3,8 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import PageLayout from '../components/layout/PageLayout'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import StartRideModal from '../components/StartRideModal'
 
 const statusConfig = {
   pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800', icon: 'pending' },
@@ -15,9 +16,11 @@ const statusConfig = {
 
 export default function MyBookingsPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [startRideBooking, setStartRideBooking] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -78,10 +81,7 @@ export default function MyBookingsPage() {
               {filter === 'all' ? 'Start your journey with Fleet' : 'Switch filter to see other bookings'}
             </p>
             {filter === 'all' && (
-              <Link
-                to="/browse"
-                className="bg-primary-container text-white px-6 py-2.5 rounded-xl font-bold hover:opacity-90 transition-all"
-              >
+              <Link to="/browse" className="bg-primary-container text-white px-6 py-2.5 rounded-xl font-bold hover:opacity-90 transition-all">
                 Browse Vehicles
               </Link>
             )}
@@ -98,11 +98,7 @@ export default function MyBookingsPage() {
                   {/* Vehicle image strip */}
                   {b.vehicleImage && (
                     <div className="h-36 bg-surface-container overflow-hidden">
-                      <img
-                        src={b.vehicleImage}
-                        alt={b.vehicleName}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={b.vehicleImage} alt={b.vehicleName} className="w-full h-full object-cover" />
                     </div>
                   )}
                   <div className="p-5">
@@ -128,11 +124,11 @@ export default function MyBookingsPage() {
                       </div>
                       <div className="bg-surface-container rounded-xl p-3">
                         <p className="text-[11px] text-secondary uppercase tracking-wide mb-1">Duration</p>
-                        <p className="font-bold text-on-surface text-label-md">{b.totalDays} day{b.totalDays !== 1 ? 's' : ''}</p>
+                        <p className="font-bold text-on-surface text-label-md">{b.totalDays || b.pricing?.days} day{b.totalDays !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-outline-variant">
+                    <div className="flex items-center justify-between pt-3 border-t border-outline-variant mb-4">
                       <div>
                         <p className="text-[11px] text-secondary uppercase tracking-wide">Booking ID</p>
                         <p className="font-bold text-on-surface text-label-md">{b.bookingId}</p>
@@ -142,6 +138,77 @@ export default function MyBookingsPage() {
                         <p className="font-bold text-primary-container text-lg">₹{b.pricing?.total?.toLocaleString('en-IN')}</p>
                       </div>
                     </div>
+
+                    {/* Action buttons per status */}
+                    <div className="flex gap-2">
+                      {b.status === 'pending' && (
+                        <>
+                          <button className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium text-secondary cursor-not-allowed opacity-60">
+                            Awaiting Approval...
+                          </button>
+                          <Link
+                            to="/my-bookings"
+                            className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold flex items-center justify-center hover:bg-red-50 transition-all"
+                          >
+                            Cancel
+                          </Link>
+                        </>
+                      )}
+
+                      {b.status === 'approved' && (
+                        <>
+                          <button
+                            onClick={() => setStartRideBooking(b)}
+                            className="flex-[2] h-10 bg-primary-container text-white rounded-xl text-label-md font-bold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                            Start Ride →
+                          </button>
+                          <button className="flex-1 h-10 border border-error text-error rounded-xl text-label-md font-bold hover:bg-red-50 transition-all">
+                            Cancel
+                          </button>
+                        </>
+                      )}
+
+                      {b.status === 'active' && (
+                        <>
+                          <button
+                            onClick={() => navigate(`/ride/${b.id}`)}
+                            className="flex-[2] h-10 bg-green-600 text-white rounded-xl text-label-md font-bold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>radio_button_checked</span>
+                            View Ride →
+                          </button>
+                          <button
+                            onClick={() => navigate(`/ride/${b.id}`)}
+                            className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium hover:bg-surface-container transition-all"
+                          >
+                            End Ride
+                          </button>
+                        </>
+                      )}
+
+                      {b.status === 'completed' && (
+                        <>
+                          <Link
+                            to={`/booking/${b.vehicleId}`}
+                            className="flex-1 h-10 bg-primary/10 text-primary rounded-xl text-label-md font-bold flex items-center justify-center hover:bg-primary/20 transition-all"
+                          >
+                            Book Again
+                          </Link>
+                          <button className="flex-1 h-10 border border-outline-variant rounded-xl text-label-md font-medium text-secondary hover:bg-surface-container transition-all">
+                            View Invoice
+                          </button>
+                        </>
+                      )}
+
+                      {b.status === 'cancelled' && (
+                        <div className="flex-1 h-10 bg-surface-container rounded-xl text-label-md font-bold text-secondary flex items-center justify-center gap-2">
+                          <span className="material-symbols-outlined text-[16px]">cancel</span>
+                          Cancelled
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -149,6 +216,14 @@ export default function MyBookingsPage() {
           </div>
         )}
       </div>
+
+      {/* StartRideModal */}
+      {startRideBooking && (
+        <StartRideModal
+          booking={startRideBooking}
+          onClose={() => setStartRideBooking(null)}
+        />
+      )}
     </PageLayout>
   )
 }

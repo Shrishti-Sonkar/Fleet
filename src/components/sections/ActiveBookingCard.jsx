@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveBooking } from '../../hooks/useActiveBooking'
+import StartRideModal from '../StartRideModal'
 
-// ── Countdown hook ────────────────────────────────────────────────────────────
+// ── Countdown hook ─────────────────────────────────────────────────────────────
 function useCountdown(targetDateStr, targetTimeStr) {
   const [timeLeft, setTimeLeft] = useState(null)
   const [isLate, setIsLate]     = useState(false)
@@ -82,23 +83,35 @@ const STATUS_CONFIG = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ActiveBookingCard() {
-  const { activeBooking, loading } = useActiveBooking()
-  const navigate   = useNavigate()
+  const { activeBooking, upcomingBooking, loading } = useActiveBooking()
+  const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
+  const [showStartModal, setShowStartModal] = useState(false)
 
-  const config = STATUS_CONFIG[activeBooking?.status] || STATUS_CONFIG.pending
+  // Prefer active over upcoming
+  const booking = activeBooking || upcomingBooking
+  const config = STATUS_CONFIG[booking?.status] || STATUS_CONFIG.pending
 
-  const targetDate = activeBooking?.status === 'active'
-    ? activeBooking?.dropoffDate
-    : activeBooking?.pickupDate
+  const targetDate = booking?.status === 'active'
+    ? booking?.dropoffDate
+    : booking?.pickupDate
 
-  const targetTime = activeBooking?.status === 'active'
-    ? activeBooking?.dropoffTime || '10:00'
-    : activeBooking?.pickupTime  || '10:00'
+  const targetTime = booking?.status === 'active'
+    ? booking?.dropoffTime || '10:00'
+    : booking?.pickupTime  || '10:00'
 
   const { timeLeft, isLate } = useCountdown(targetDate, targetTime)
 
-  if (loading || !activeBooking) return null
+  if (loading || !booking) return null
+
+  const handleCTAClick = (e) => {
+    e.stopPropagation()
+    if (booking.status === 'active') {
+      navigate(`/ride/${booking.id}`)
+    } else if (booking.status === 'approved') {
+      setShowStartModal(true)
+    }
+  }
 
   return (
     <div className="px-gutter max-w-screen-2xl mx-auto mb-4">
@@ -117,14 +130,14 @@ export default function ActiveBookingCard() {
               {isLate ? '⚠ LATE' : config.label}
             </span>
             <span className={`font-bold text-[15px] ${config.textColor}`}>
-              {activeBooking.vehicleName}
+              {booking.vehicleName}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {activeBooking.vehicleImage && (
+            {booking.vehicleImage && (
               <img
-                src={activeBooking.vehicleImage}
-                alt={activeBooking.vehicleName}
+                src={booking.vehicleImage}
+                alt={booking.vehicleName}
                 className="w-10 h-10 rounded-lg object-cover"
               />
             )}
@@ -141,13 +154,13 @@ export default function ActiveBookingCard() {
           <div className="px-4 py-2.5">
             <p className={`text-[10px] uppercase tracking-wider ${config.subColor} mb-0.5`}>Pick-up time</p>
             <p className={`text-[13px] font-bold ${config.textColor}`}>
-              {activeBooking.pickupDate}, {activeBooking.pickupTime || '10:00'}
+              {booking.pickupDate}, {booking.pickupTime || '10:00'}
             </p>
           </div>
           <div className="px-4 py-2.5">
             <p className={`text-[10px] uppercase tracking-wider ${config.subColor} mb-0.5`}>Pick-up location</p>
             <p className={`text-[13px] font-bold ${config.textColor}`}>
-              {activeBooking.city || 'Central Hub'}
+              {booking.city || 'Central Hub'}
             </p>
           </div>
         </div>
@@ -181,10 +194,10 @@ export default function ActiveBookingCard() {
           <div className="border-t border-white/10 px-4 py-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Booking ID',   value: activeBooking.bookingId || activeBooking.id?.slice(0, 8).toUpperCase() },
-                { label: 'Amount Paid',  value: `₹${activeBooking.pricing?.total?.toLocaleString('en-IN') || '—'}` },
-                { label: 'Duration',     value: `${activeBooking.totalDays || 1} day${activeBooking.totalDays !== 1 ? 's' : ''}` },
-                { label: 'Drop-off',     value: activeBooking.dropoffDate || '—' },
+                { label: 'Booking ID',   value: booking.bookingId || booking.id?.slice(0, 8).toUpperCase() },
+                { label: 'Amount Paid',  value: `₹${booking.pricing?.total?.toLocaleString('en-IN') || '—'}` },
+                { label: 'Duration',     value: `${booking.totalDays || 1} day${booking.totalDays !== 1 ? 's' : ''}` },
+                { label: 'Drop-off',     value: booking.dropoffDate || '—' },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p className={`text-[10px] uppercase tracking-wider ${config.subColor} mb-0.5`}>{label}</p>
@@ -194,24 +207,42 @@ export default function ActiveBookingCard() {
             </div>
 
             <div className="flex gap-2 pt-1">
+              {booking.status === 'active' ? (
+                <button
+                  onClick={handleCTAClick}
+                  className="flex-1 py-2.5 bg-green-600 hover:opacity-90 text-white font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>radio_button_checked</span>
+                  View Live Ride
+                </button>
+              ) : booking.status === 'approved' ? (
+                <button
+                  onClick={handleCTAClick}
+                  className="flex-1 py-2.5 bg-primary-container hover:opacity-90 text-white font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                  Start Ride
+                </button>
+              ) : null}
               <button
-                onClick={(e) => { e.stopPropagation(); navigate(`/my-bookings`) }}
+                onClick={(e) => { e.stopPropagation(); navigate('/my-bookings') }}
                 className="flex-1 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
               >
                 <span className="material-symbols-outlined text-[16px]">description</span>
-                View Details
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); navigate('/my-bookings') }}
-                className="flex-1 py-2.5 bg-primary-container hover:opacity-90 text-white font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">payments</span>
-                ₹{activeBooking.pricing?.total?.toLocaleString('en-IN') || '—'}
+                All Bookings
               </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* StartRideModal */}
+      {showStartModal && (
+        <StartRideModal
+          booking={booking}
+          onClose={() => setShowStartModal(false)}
+        />
+      )}
     </div>
   )
 }
