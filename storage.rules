@@ -1,0 +1,42 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isLoggedIn() && userDoc().role == 'admin';
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    match /profilePhotos/{userId} {
+      allow read: if true;
+      allow write: if isLoggedIn() && request.auth.uid == userId && isImage();
+    }
+
+    match /vehicles/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isLoggedIn() && request.auth.uid == userId && isImage();
+      allow delete: if isAdmin() || (isLoggedIn() && request.auth.uid == userId);
+    }
+
+    match /kyc/{userId}/{fileName} {
+      allow read: if isAdmin() || (isLoggedIn() && request.auth.uid == userId);
+      allow write: if isLoggedIn() && request.auth.uid == userId && isImage();
+      allow delete: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

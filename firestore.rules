@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isOwner(userId) {
+      return isLoggedIn() && request.auth.uid == userId;
+    }
+
+    function hasRole(role) {
+      return isLoggedIn() && userDoc().role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function isVendor() {
+      return hasRole('vendor');
+    }
+
+    function userCreateFields() {
+      return [
+        'uid', 'name', 'email', 'phone', 'role', 'roleSetAt',
+        'kycStatus', 'isVerified', 'verifiedBadge',
+        'tokens', 'tokensUsed', 'createdAt', 'updatedAt'
+      ];
+    }
+
+    function safeUserUpdateFields() {
+      return [
+        'name', 'phone', 'photoURL', 'captainMode', 'payout',
+        'role', 'roleSetAt',
+        'kycStatus', 'aadhaarUrl', 'dlUrl', 'selfieUrl',
+        'tokens', 'tokensUsed',
+        'updatedAt'
+      ];
+    }
+
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    function roleIsSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+        || request.resource.data.role in ['renter', 'vendor'];
+    }
+
+    function kycStatusIsSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['kycStatus'])
+        || request.resource.data.kycStatus in ['not_submitted', 'pending', 'rejected'];
+    }
+
+    function tokenMigrationIsSafe() {
+      return (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tokens'])
+        || (!('tokens' in resource.data) && request.resource.data.tokens == 10)
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tokensUsed'])
+        || (!('tokensUsed' in resource.data) && request.resource.data.tokensUsed == 0)
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(userCreateFields())
+        && (!('role' in request.resource.data) || request.resource.data.role in ['renter', 'vendor'])
+        && (!('kycStatus' in request.resource.data) || request.resource.data.kycStatus in ['not_submitted', 'pending']);
+      allow update: if isAdmin()
+        || (
+          isOwner(userId)
+          && changedOnly(safeUserUpdateFields())
+          && roleIsSafe()
+          && kycStatusIsSafe()
+          && tokenMigrationIsSafe()
+        );
+      allow delete: if isAdmin();
+
+      match /addresses/{addressId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /vehicles/{vehicleId} {
+      allow read: if true;
+      allow create: if isVendor()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isAdmin()
+        || (
+          isVendor()
+          && resource.data.ownerId == request.auth.uid
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.status == resource.data.status
+          && changedOnly(['available', 'updatedAt'])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isLoggedIn() && (
+        resource.data.renterId == request.auth.uid ||
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /verificationRequests/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isLoggedIn()
+        && request.resource.data.renterId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /wishlists/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /notifications/{notifId} {
+      allow read, update, delete: if isLoggedIn()
+        && resource.data.userId == request.auth.uid;
+      allow create: if isLoggedIn();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow create: if isLoggedIn()
+        && request.resource.data.renterId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /reportActions/{actionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /paymentEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /paymentOrders/{orderId} {
+      allow read, write: if false;
+    }
+  }
+}
