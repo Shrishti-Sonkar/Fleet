@@ -11,17 +11,22 @@ export default function LoginPage() {
   const { signin, signup, googleSignin, sendOTP, verifyOTP } = useAuth()
 
   // ── Role-aware post-login redirect ────────────────────────────────────────
+  const redirectForRole = (role) => {
+    const normalized = role === 'owner' ? 'vendor' : role
+    navigate(normalized === 'vendor' ? ROUTES.VENDOR_HOME : ROUTES.HOME, { replace: true })
+  }
+
   const handlePostLogin = async (firebaseUser) => {
     try {
       const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid))
-      if (!userSnap.exists() || !userSnap.data().role) {
+      let role = userSnap.exists() ? userSnap.data().role : null
+      if (!role) {
         // New user with no role — default to renter
         const { setDoc, serverTimestamp } = await import('firebase/firestore')
         await setDoc(doc(db, 'users', firebaseUser.uid), { role: 'renter', roleSetAt: serverTimestamp() }, { merge: true })
-        navigate(ROUTES.HOME, { replace: true })
-      } else {
-        navigate(ROUTES.HOME, { replace: true })
+        role = 'renter'
       }
+      redirectForRole(role)
     } catch {
       navigate(ROUTES.HOME, { replace: true })
     }
@@ -205,8 +210,12 @@ export default function LoginPage() {
     setSignupError('')
     try {
       await signup(signupEmail, signupPassword, signupName.trim(), '+91' + signupPhone.replace(/\D/g, ''), signupRole)
-      toast.success('Account created! Welcome to Fleet 🎉')
-      navigate(ROUTES.HOME, { replace: true })
+      toast.success(
+        signupRole === 'vendor'
+          ? 'Vendor account created! Welcome to Fleet 🎉'
+          : 'Account created! Welcome to Fleet 🎉'
+      )
+      redirectForRole(signupRole)
     } catch (err) {
       const msg =
         err.code === 'auth/email-already-in-use'
@@ -549,6 +558,42 @@ export default function LoginPage() {
               <div>
                 <h2 className="text-headline-lg-mobile font-bold text-on-surface">Create account</h2>
                 <p className="text-secondary mt-1 text-body-md">Join India's most premium vehicle rental community.</p>
+              </div>
+
+              {/* ── Role chooser: Renter vs Vendor ── */}
+              <div>
+                <label className="block text-label-md font-medium text-secondary mb-2">I want to join as</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'renter', icon: 'two_wheeler', title: 'Rider', sub: 'Rent & ride vehicles' },
+                    { id: 'vendor', icon: 'storefront', title: 'Vendor', sub: 'List & earn from vehicles' },
+                  ].map(opt => {
+                    const selected = signupRole === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSignupRole(opt.id)}
+                        className={`relative flex flex-col items-start gap-1 rounded-2xl border-2 p-4 text-left transition-all ${
+                          selected
+                            ? 'border-primary-container bg-primary-fixed/30 shadow-sm'
+                            : 'border-outline-variant bg-surface hover:border-primary-container/60'
+                        }`}
+                      >
+                        {selected && (
+                          <span className="absolute top-2.5 right-2.5 material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                            check_circle
+                          </span>
+                        )}
+                        <span className={`material-symbols-outlined text-[26px] ${selected ? 'text-primary' : 'text-secondary'}`} style={{ fontVariationSettings: selected ? "'FILL' 1" : "'FILL' 0" }}>
+                          {opt.icon}
+                        </span>
+                        <span className="font-bold text-on-surface text-body-md">{opt.title}</span>
+                        <span className="text-label-sm text-secondary leading-tight">{opt.sub}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <form className="space-y-4" onSubmit={handleSignUp}>

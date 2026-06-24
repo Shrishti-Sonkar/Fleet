@@ -1,20 +1,46 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { collection, query, where, getDocs } from 'firebase/firestore'
+import { motion } from 'framer-motion'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import { ROUTES } from '@/lib/constants'
 import TopNavBar from '../components/layout/TopNavBar'
 import VendorNav from '../components/VendorNav'
 
-function StatCard({ value, label, icon, color = 'text-black' }) {
+// Entrance animation presets
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 24 } },
+}
+
+function StatCard({ value, label, icon, accent = 'slate' }) {
+  const accents = {
+    green: { chip: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-600', glow: 'before:bg-emerald-400/20' },
+    slate: { chip: 'bg-slate-100 text-slate-500', value: 'text-slate-900', glow: 'before:bg-slate-400/10' },
+    blue:  { chip: 'bg-blue-50 text-blue-600', value: 'text-slate-900', glow: 'before:bg-blue-400/20' },
+    amber: { chip: 'bg-amber-50 text-amber-500', value: 'text-amber-500', glow: 'before:bg-amber-400/20' },
+  }
+  const a = accents[accent] || accents.slate
   return (
-    <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex-1 min-w-0">
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-xs text-gray-500 font-medium">{label}</span>
-        <span className="material-symbols-outlined text-[18px] text-gray-300" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+    <div
+      className={`group relative overflow-hidden rounded-2xl bg-white p-4 border border-slate-100
+        shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)]
+        transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.06),0_16px_40px_-16px_rgba(15,23,42,0.22)]
+        before:absolute before:-right-6 before:-top-6 before:h-20 before:w-20 before:rounded-full before:blur-2xl
+        before:transition-opacity before:duration-300 before:opacity-0 group-hover:before:opacity-100 ${a.glow}`}
+    >
+      <div className="relative flex items-start justify-between mb-3">
+        <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">{label}</span>
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${a.chip}`}>
+          <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+        </span>
       </div>
-      <div className={`text-2xl font-black ${color} tracking-tight`}>{value}</div>
+      <div className={`relative text-2xl font-black tracking-tight ${a.value}`}>{value}</div>
     </div>
   )
 }
@@ -108,101 +134,120 @@ export default function VendorHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
+    <div className="min-h-screen bg-slate-50" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
       <TopNavBar />
 
-      <main className="max-w-2xl mx-auto px-4 pt-[84px] pb-8 space-y-6">
+      <motion.main
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="max-w-2xl mx-auto px-4 pt-[84px] pb-8 space-y-6"
+      >
 
-        {/* Greeting */}
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-[13px] text-gray-400 font-medium uppercase tracking-wider">Vendor Dashboard</p>
+        {/* Greeting — premium gradient header */}
+        <motion.div
+          variants={item}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-5 text-white shadow-[0_18px_40px_-18px_rgba(15,23,42,0.55)]"
+        >
+          {/* decorative glow blobs */}
+          <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-primary/30 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-blue-500/20 blur-3xl" />
+
+          <div className="relative flex items-start justify-between">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-sm ring-1 ring-white/10">
+                <span className="material-symbols-outlined text-[14px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>storefront</span>
+                Vendor Dashboard
+              </span>
+              <h1 className="mt-3 text-2xl font-black tracking-tight">
+                {greeting}, {firstName} <span className="inline-block">👋</span>
+              </h1>
+              <p className="mt-1 text-sm text-white/55">Here's your fleet overview</p>
             </div>
-            <h1 className="text-2xl font-black text-black mt-0.5">
-              {greeting}, {firstName} 👋
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">Here's your fleet overview</p>
+            <Link to={ROUTES.PROFILE} className="shrink-0">
+              <div className="h-11 w-11 overflow-hidden rounded-full bg-white/10 ring-2 ring-white/20 flex items-center justify-center text-white font-bold text-sm transition-transform hover:scale-105">
+                {userDoc?.selfieUrl
+                  ? <img src={userDoc.selfieUrl} alt="" className="h-full w-full object-cover" />
+                  : (userDoc?.name?.[0]?.toUpperCase() || 'V')}
+              </div>
+            </Link>
           </div>
-          <Link to={ROUTES.PROFILE}>
-            <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-              {userDoc?.selfieUrl
-                ? <img src={userDoc.selfieUrl} alt="" className="w-full h-full object-cover" />
-                : (userDoc?.name?.[0]?.toUpperCase() || 'V')}
-            </div>
-          </Link>
-        </div>
+        </motion.div>
 
         {/* Stats Grid */}
         {loading ? (
           <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100 h-20 animate-pulse" />
+              <div key={i} className="bg-white rounded-2xl p-4 border border-slate-100 h-24 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <motion.div variants={item} className="grid grid-cols-2 gap-3">
             <StatCard
               value={`₹${stats.monthlyEarnings.toLocaleString('en-IN')}`}
               label="This Month"
-              icon="currency_rupee"
-              color="text-green-600"
+              icon="payments"
+              accent="green"
             />
             <StatCard
               value={stats.vehicleCount}
               label="Active Vehicles"
               icon="directions_car"
+              accent="blue"
             />
             <StatCard
               value={stats.completedRides}
               label="Total Rides"
               icon="flag"
+              accent="slate"
             />
             <StatCard
               value={stats.avgRating > 0 ? `${stats.avgRating} ★` : '—'}
               label="Avg Rating"
               icon="star"
-              color="text-amber-500"
+              accent="amber"
             />
-          </div>
+          </motion.div>
         )}
 
         {/* Action Needed */}
         {!loading && stats.pendingBookings > 0 && (
-          <div
+          <motion.div
+            variants={item}
             onClick={() => navigate(ROUTES.VENDOR_DASHBOARD)}
-            className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-100 cursor-pointer active:scale-[0.98] transition-all"
+            className="group relative flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 p-4 text-white cursor-pointer shadow-[0_12px_30px_-12px_rgba(244,63,94,0.6)] transition-all active:scale-[0.98]"
           >
-            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>notifications</span>
+            <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/15 blur-2xl" />
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-white/30">
+              <span className="material-symbols-outlined text-white text-[18px] animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }}>notifications_active</span>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-red-700">Action needed</p>
-              <p className="text-xs text-red-500 mt-0.5">
+            <div className="relative flex-1">
+              <p className="text-sm font-bold">Action needed</p>
+              <p className="text-xs text-white/85 mt-0.5">
                 {stats.pendingBookings} booking request{stats.pendingBookings > 1 ? 's' : ''} waiting for approval
               </p>
             </div>
-            <span className="material-symbols-outlined text-red-400 text-[20px]">arrow_forward_ios</span>
-          </div>
+            <span className="relative material-symbols-outlined text-white/90 text-[20px] transition-transform group-hover:translate-x-0.5">arrow_forward_ios</span>
+          </motion.div>
         )}
 
         {/* Your Vehicles */}
-        <div>
+        <motion.div variants={item}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-black">Your Vehicles</h2>
-            <Link to={ROUTES.VENDOR_DASHBOARD} className="text-xs font-semibold text-gray-500">
+            <h2 className="font-bold text-slate-900">Your Vehicles</h2>
+            <Link to={ROUTES.VENDOR_DASHBOARD} className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors">
               See all →
             </Link>
           </div>
 
           {vehicles.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-              <span className="text-4xl block mb-3">🚗</span>
-              <p className="font-semibold text-gray-700 mb-1">No vehicles yet</p>
-              <p className="text-sm text-gray-400 mb-4">List your first vehicle to start earning</p>
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center">
+              <span className="mb-3 block text-4xl">🚗</span>
+              <p className="mb-1 font-semibold text-slate-700">No vehicles yet</p>
+              <p className="mb-4 text-sm text-slate-400">List your first vehicle to start earning</p>
               <Link
                 to={ROUTES.VENDOR_ADD}
-                className="inline-flex items-center gap-2 bg-black text-white text-sm font-bold px-5 py-2.5 rounded-full"
+                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-800 active:scale-95"
               >
                 <span className="material-symbols-outlined text-[16px]">add</span>
                 Add Vehicle
@@ -211,22 +256,28 @@ export default function VendorHomePage() {
           ) : (
             <div className="space-y-3">
               {vehicles.slice(0, 3).map(v => (
-                <div key={v.id} className="bg-white rounded-2xl p-3.5 border border-gray-100 shadow-sm flex items-center gap-3">
-                  <div className="w-16 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+                <div
+                  key={v.id}
+                  className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5
+                    shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300
+                    hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-[0_12px_30px_-16px_rgba(15,23,42,0.25)]"
+                >
+                  <div className="h-14 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                     <img
                       src={v.imageUrl || v.images?.[0]}
                       alt={v.name}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       onError={e => { e.target.style.display = 'none' }}
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm text-black truncate">{v.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{v.city} · ₹{v.dailyPrice}/day</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-slate-900">{v.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{v.city} · ₹{v.dailyPrice}/day</p>
                   </div>
-                  <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                    v.available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  <div className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                    v.available ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
                   }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${v.available ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                     {v.available ? 'Available' : 'Booked'}
                   </div>
                 </div>
@@ -234,50 +285,50 @@ export default function VendorHomePage() {
 
               <Link
                 to={ROUTES.VENDOR_ADD}
-                className="flex items-center justify-center gap-2 w-full p-3.5 bg-white rounded-2xl border border-dashed border-gray-200 text-sm font-semibold text-gray-500 hover:border-black hover:text-black transition-all"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white p-3.5 text-sm font-semibold text-slate-500 transition-all hover:border-slate-900 hover:text-slate-900"
               >
                 <span className="material-symbols-outlined text-[18px]">add</span>
                 Add New Vehicle
               </Link>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Recent Activity */}
         {recentActivity.length > 0 && (
-          <div>
+          <motion.div variants={item}>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-black">Recent Activity</h2>
-              <Link to={ROUTES.VENDOR_DASHBOARD} className="text-xs font-semibold text-gray-500">
+              <h2 className="font-bold text-slate-900">Recent Activity</h2>
+              <Link to={ROUTES.VENDOR_DASHBOARD} className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors">
                 View all →
               </Link>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_30px_-20px_rgba(15,23,42,0.2)] divide-y divide-slate-50">
               {recentActivity.map((b) => {
                 const sc = statusConfig[b.status] || { label: b.status, bg: 'bg-gray-100', text: 'text-gray-600' }
                 return (
-                  <div key={b.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-gray-500 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>directions_car</span>
+                  <div key={b.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                      <span className="material-symbols-outlined text-slate-500 text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>directions_car</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-black truncate">{b.vehicleName || 'Vehicle'}</p>
-                      <p className="text-xs text-gray-400">{b.renterName || 'Customer'}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{b.vehicleName || 'Vehicle'}</p>
+                      <p className="text-xs text-slate-400">{b.renterName || 'Customer'}</p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="shrink-0 text-right">
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>
                         {sc.label}
                       </span>
-                      <p className="text-xs text-gray-400 mt-1">₹{b.pricing?.total?.toLocaleString('en-IN') || '—'}</p>
+                      <p className="mt-1 text-xs text-slate-400">₹{b.pricing?.total?.toLocaleString('en-IN') || '—'}</p>
                     </div>
                   </div>
                 )
               })}
             </div>
-          </div>
+          </motion.div>
         )}
 
-      </main>
+      </motion.main>
 
       <VendorNav />
     </div>

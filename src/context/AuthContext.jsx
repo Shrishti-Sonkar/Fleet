@@ -83,14 +83,16 @@ export function AuthProvider({ children }) {
     setUserDoc(uDoc)
   }
 
-  const signup = async (email, password, name, phone) => {
+  const signup = async (email, password, name, phone, role = 'renter') => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await setDoc(doc(db, 'users', cred.user.uid), {
       uid: cred.user.uid,
       name,
       email,
       phone: phone || '',
-      // role is NOT set here — set on RoleSelectionPage
+      // Role chosen by the user on the sign-up screen
+      role: role === 'vendor' ? 'vendor' : 'renter',
+      roleSetAt: serverTimestamp(),
       kycStatus: 'not_submitted',
       isVerified: false,
       verifiedBadge: false,

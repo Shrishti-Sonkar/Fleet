@@ -3,7 +3,6 @@ export const ROUTES = {
   SPLASH: '/splash',
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
-  CHOOSE_ROLE: '/choose-role',
   BROWSE: '/browse',
   HOST: '/host',
   ABOUT: '/about',
@@ -33,8 +32,6 @@ export const ROUTES = {
   ADMIN_REPORTS: '/admin/reports',
   ADMIN_COUPONS: '/admin/coupons',
   ADMIN_SETTINGS: '/admin/settings',
-  PAYMENT_SUCCESS: '/payment/success',
-  PAYMENT_FAILURE: '/payment/failure',
 
   VEHICLE_DETAIL: (id = ':id') => `/vehicle/${id}`,
   BOOKING: (id = ':id') => `/booking/${id}`,

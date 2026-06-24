@@ -13,7 +13,6 @@ import LoginPage from './pages/LoginPage'
 
 // Lazy imports — all pages
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
-const RoleSelectionPage  = lazy(() => import('./pages/RoleSelectionPage'))
 const HomePage           = lazy(() => import('./pages/HomePage'))
 const BrowsePage         = lazy(() => import('./pages/BrowsePage'))
 const VehicleDetailPage  = lazy(() => import('./pages/VehicleDetailPage'))
@@ -33,7 +32,6 @@ const AdminDashboard     = lazy(() => import('./pages/AdminDashboard'))
 const EditProfilePage    = lazy(() => import('./pages/EditProfilePage'))
 const NotificationsPage  = lazy(() => import('./pages/NotificationsPage'))
 const LegalPage          = lazy(() => import('./pages/LegalPage'))
-const PaymentStatusPage  = lazy(() => import('./pages/PaymentStatusPage'))
 const NotFoundPage       = lazy(() => import('./pages/NotFoundPage'))
 const WalletPage         = lazy(() => import('./pages/WalletPage'))
 const BookingDetailPage  = lazy(() => import('./pages/BookingDetailPage'))
@@ -84,13 +82,6 @@ export default function App() {
           <Route path={ROUTES.INSURANCE_POLICY} element={<LegalPage />} />
           <Route path={ROUTES.SAFETY}         element={<LegalPage />} />
           <Route path={ROUTES.CONTACT}        element={<LegalPage />} />
-          <Route path={ROUTES.PAYMENT_SUCCESS} element={<PaymentStatusPage />} />
-          <Route path={ROUTES.PAYMENT_FAILURE} element={<PaymentStatusPage />} />
-
-          {/* ── ROLE SELECTION (one-time) ── */}
-          <Route path={ROUTES.CHOOSE_ROLE} element={
-            <ProtectedRoute><RoleSelectionPage /></ProtectedRoute>
-          } />
 
           {/* ── RENTER ROUTES ── */}
           <Route path={ROUTES.HOME} element={

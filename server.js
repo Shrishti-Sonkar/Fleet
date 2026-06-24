@@ -425,6 +425,66 @@ app.post('/api/bookings/:id/complete', requireAuth, async (req, res) => {
   }
 })
 
+app.post('/api/bookings/:id/review', requireAuth, async (req, res) => {
+  try {
+    const { rating, subRatings = {}, tags = [], comment = '' } = req.body
+    const r = Number(rating)
+    if (!Number.isInteger(r) || r < 1 || r > 5) throw new Error('A rating between 1 and 5 is required')
+
+    const { bookingRef, booking } = await requireBookingAccess(req.params.id, req.user.uid, { renter: true })
+    if (booking.status !== 'completed') throw new Error('Only completed rides can be reviewed')
+    if (booking.reviewed) throw new Error('You have already reviewed this ride')
+
+    const reviewRef = db.collection('reviews').doc()
+
+    await db.runTransaction(async (transaction) => {
+      const vehicleRef = booking.vehicleId ? db.collection('vehicles').doc(booking.vehicleId) : null
+      const vehicleSnap = vehicleRef ? await transaction.get(vehicleRef) : null
+
+      transaction.set(reviewRef, {
+        vehicleId: booking.vehicleId || '',
+        bookingId: bookingRef.id,
+        renterId: req.user.uid,
+        renterName: booking.renterName || req.user.name || 'Anonymous',
+        ownerId: booking.ownerId || '',
+        rating: r,
+        renterRating: r,
+        subRatings: {
+          cleanliness: Number(subRatings.cleanliness) || 0,
+          condition: Number(subRatings.condition) || 0,
+          responsiveness: Number(subRatings.responsiveness) || 0,
+        },
+        tags: Array.isArray(tags) ? tags.slice(0, 10) : [],
+        comment: String(comment).slice(0, 1000),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      // Recompute the vehicle's running average so displayed stars actually change
+      if (vehicleRef && vehicleSnap?.exists) {
+        const data = vehicleSnap.data()
+        const newCount = (data.reviewCount || 0) + 1
+        const newSum = (data.ratingSum || 0) + r
+        transaction.update(vehicleRef, {
+          reviewCount: newCount,
+          ratingSum: newSum,
+          rating: Math.round((newSum / newCount) * 10) / 10,
+        })
+      }
+
+      transaction.update(bookingRef, {
+        renterRating: r,
+        reviewed: true,
+        reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+
+    res.status(200).json({ success: true })
+  } catch (error) {
+    bookingError(res, error, 'Unable to submit review')
+  }
+})
+
 app.post('/api/bookings/:id/regenerate-code', requireAuth, async (req, res) => {
   try {
     const { type } = req.body
@@ -460,6 +520,13 @@ app.use((err, req, res, next) => {
   return next(err)
 })
 
-app.listen(PORT, () => {
-  console.log(`Fleet Backend Server running on port ${PORT}`)
-})
+// Only start a long-running server when run directly (local dev / a Node host
+// like Render/Railway). On Vercel the app is imported as a serverless handler
+// (see api/index.js) and must NOT call listen().
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Fleet Backend Server running on port ${PORT}`)
+  })
+}
+
+export default app

@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { collection, addDoc, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { apiFetch } from '../lib/api'
 
 const TAGS = ['Clean vehicle', 'On time', 'Great owner', 'Smooth drive', 'As described', 'Well maintained', 'Fair pricing']
 
@@ -47,27 +46,20 @@ export default function PostRideRating({ booking, onDone }) {
     }
     setLoading(true)
     try {
-      // Write review doc
-      await addDoc(collection(db, 'reviews'), {
-        vehicleId: booking.vehicleId,
-        bookingId: booking.id,
-        renterId: user.uid,
-        renterName: user.displayName || 'Anonymous',
-        rating: overall,
-        subRatings: { cleanliness, condition, responsiveness },
-        tags: selectedTags,
-        comment: comment.trim(),
-        createdAt: serverTimestamp(),
+      // Submit via the backend (admin SDK) so it can securely write the review,
+      // record renterRating on the booking, and recompute the vehicle's average
+      // rating — writes that Firestore security rules (correctly) block clients from.
+      const token = await user.getIdToken()
+      await apiFetch(`/api/bookings/${booking.id}/review`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          rating: overall,
+          subRatings: { cleanliness, condition, responsiveness },
+          tags: selectedTags,
+          comment: comment.trim(),
+        }),
       })
-
-      // Update vehicle average rating
-      if (booking.vehicleId) {
-        const vehicleRef = doc(db, 'vehicles', booking.vehicleId)
-        await updateDoc(vehicleRef, {
-          reviewCount: increment(1),
-          ratingSum: increment(overall),
-        })
-      }
 
       toast.success('Review submitted! Thanks for the feedback ⭐')
       navigate('/my-bookings')
