@@ -1,8 +1,6 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import crypto from 'crypto'
-import Razorpay from 'razorpay/dist/razorpay.js'
 import admin from 'firebase-admin'
 
 dotenv.config()
@@ -11,26 +9,33 @@ const app = express()
 const PORT = process.env.PORT || 5000
 
 /*
- * CORS configuration — production-hardened.
+ * CORS configuration
  *
- * allowedOrigins: comma-separated list read from CORS_ORIGINS env var.
- *   Defaults to the Vite dev server origin. In production, set this to your
- *   deployed frontend domain(s), e.g.:
- *     CORS_ORIGINS=https://fleetmobilities.vercel.app,https://fleet.vercel.app
+ * CORS_ORIGINS  — comma-separated exact origins allowed in production.
+ *   e.g. CORS_ORIGINS=https://fleetmobilities.vercel.app,https://fleet-rental.vercel.app
+ *
+ * CORS_PATTERN  — optional JS regex string to allow dynamic origins such as
+ *   Vercel preview URLs.  No delimiters, no flags.
+ *   e.g. CORS_PATTERN=https://fleet-rental-[a-z0-9-]+\.vercel\.app
  */
 const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
 
-// In development, also allow any localhost / 127.0.0.1 port (e.g. Vite on 5173)
+const corsPattern = process.env.CORS_PATTERN
+  ? new RegExp(`^${process.env.CORS_PATTERN}$`)
+  : null
+
 const isDevMode = process.env.NODE_ENV !== 'production'
 
 app.use(cors({
   origin(origin, callback) {
-    // Allow requests with no origin (server-to-server, curl, Postman, etc.)
+    // Allow server-to-server, curl, Postman, etc.
     if (!origin) return callback(null, true)
     if (allowedOrigins.includes(origin)) return callback(null, true)
+    // Allow dynamic preview URLs matched by CORS_PATTERN
+    if (corsPattern && corsPattern.test(origin)) return callback(null, true)
     // In development, allow any localhost / 127.0.0.1 origin automatically
     if (isDevMode && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       return callback(null, true)
@@ -45,7 +50,6 @@ app.use(cors({
   optionsSuccessStatus: 204,
 }))
 
-app.use('/api/payments/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '1mb' }))
 
 if (!admin.apps.length) {
@@ -63,15 +67,7 @@ if (!admin.apps.length) {
   }
 }
 
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-  throw new Error('Razorpay credentials are not configured')
-}
-
 const db = admin.firestore()
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
 
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || ''
@@ -185,14 +181,6 @@ async function priceBooking(details) {
   }
 }
 
-function verifyRazorpaySignature(orderId, paymentId, signature) {
-  const expected = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    .update(`${orderId}|${paymentId}`)
-    .digest('hex')
-  return expected === signature
-}
-
 async function getUserDoc(uid) {
   const snap = await db.collection('users').doc(uid).get()
   return snap.exists ? { id: snap.id, ...snap.data() } : null
@@ -241,99 +229,15 @@ app.get('/api/health', (req, res) => {
   })
 })
 
-app.post('/api/payments/order', requireAuth, async (req, res) => {
+app.post('/api/bookings/create', requireAuth, async (req, res) => {
   try {
-    const details = req.body.bookingDetails || req.body
-    const priced = await priceBooking(details)
-    const receipt = `flt_${Date.now()}_${req.user.uid.slice(0, 8)}`
-
-    const order = await razorpay.orders.create({
-      amount: priced.pricing.total * 100,
-      currency: 'INR',
-      receipt,
-      notes: {
-        vehicleId: priced.vehicle.id,
-        renterId: req.user.uid,
-      },
-    })
-
-    await db.collection('paymentOrders').doc(order.id).set({
-      renterId: req.user.uid,
-      vehicleId: priced.vehicle.id,
-      amount: order.amount,
-      currency: order.currency,
-      status: 'created',
-      receipt,
-      pricing: priced.pricing,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-
-    res.status(200).json({
-      id: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      pricing: priced.pricing,
-    })
-  } catch (error) {
-    res.status(400).json({ error: error.message || 'Unable to create payment order' })
-  }
-})
-
-app.post('/api/payments/verify', requireAuth, async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature,
-      bookingDetails,
-    } = req.body
-
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return res.status(400).json({ error: 'Complete Razorpay verification payload is required' })
-    }
-
-    if (!verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
-      return res.status(400).json({ error: 'Invalid payment signature' })
-    }
-
+    const bookingDetails = req.body.bookingDetails || req.body
     const priced = await priceBooking(bookingDetails || {})
-    const paymentOrderRef = db.collection('paymentOrders').doc(razorpay_order_id)
-    const paymentOrderSnap = await paymentOrderRef.get()
-    if (!paymentOrderSnap.exists) {
-      return res.status(400).json({ error: 'Payment order was not created by Fleet' })
-    }
-
-    const paymentOrder = paymentOrderSnap.data()
-    const expectedAmount = priced.pricing.total * 100
-    if (
-      paymentOrder.status === 'used' ||
-      paymentOrder.renterId !== req.user.uid ||
-      paymentOrder.vehicleId !== priced.vehicle.id ||
-      paymentOrder.amount !== expectedAmount ||
-      paymentOrder.currency !== 'INR'
-    ) {
-      return res.status(400).json({ error: 'Payment order does not match this booking' })
-    }
-
-    const razorpayOrder = await razorpay.orders.fetch(razorpay_order_id)
-    if (
-      Number(razorpayOrder.amount) !== expectedAmount ||
-      razorpayOrder.currency !== 'INR' ||
-      razorpayOrder.notes?.renterId !== req.user.uid ||
-      razorpayOrder.notes?.vehicleId !== priced.vehicle.id
-    ) {
-      return res.status(400).json({ error: 'Razorpay order details do not match this booking' })
-    }
 
     const bid = `FLT-${Date.now().toString().slice(-6)}`
     const bookingRef = db.collection('bookings').doc()
 
     await db.runTransaction(async (transaction) => {
-      const orderSnap = await transaction.get(paymentOrderRef)
-      if (!orderSnap.exists || orderSnap.data().status === 'used') {
-        throw new Error('Payment order has already been used')
-      }
-
       const vehicleRef = db.collection('vehicles').doc(priced.vehicle.id)
       const vehicleSnap = await transaction.get(vehicleRef)
       if (!vehicleSnap.exists || vehicleSnap.data().available === false || vehicleSnap.data().status !== 'active') {
@@ -359,33 +263,25 @@ app.post('/api/payments/verify', requireAuth, async (req, res) => {
         pricing: priced.pricing,
         addons: bookingDetails?.addons || {},
         city: priced.vehicle.city || '',
-        paymentMethod: bookingDetails?.paymentMethod || 'razorpay',
+        paymentMethod: bookingDetails?.paymentMethod || 'pay_on_pickup',
         bookingId: bid,
-        paymentStatus: 'paid',
-        paymentId: razorpay_payment_id,
-        razorpayOrderId: razorpay_order_id,
+        paymentStatus: 'pay_on_pickup',
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
       transaction.update(vehicleRef, { available: false })
-      transaction.update(paymentOrderRef, {
-        status: 'used',
-        paymentId: razorpay_payment_id,
-        bookingDocId: bookingRef.id,
-        bookingId: bid,
-        usedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
     })
 
     res.status(200).json({
       success: true,
-      message: 'Payment verified and booking confirmed',
+      message: 'Booking confirmed',
       bookingId: bid,
       id: bookingRef.id,
+      pricing: priced.pricing,
     })
   } catch (error) {
-    res.status(400).json({ error: error.message || 'Payment verification failed' })
+    res.status(400).json({ error: error.message || 'Unable to create booking' })
   }
 })
 
@@ -554,29 +450,6 @@ app.post('/api/bookings/:id/regenerate-code', requireAuth, async (req, res) => {
   } catch (error) {
     bookingError(res, error, 'Unable to regenerate code')
   }
-})
-
-app.post('/api/payments/webhook', async (req, res) => {
-  const signature = req.headers['razorpay-signature']
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET
-
-  if (!secret) return res.status(501).json({ error: 'Webhook secret is not configured' })
-
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(req.body)
-    .digest('hex')
-
-  if (signature !== expected) return res.status(400).json({ error: 'Invalid webhook signature' })
-
-  const event = JSON.parse(req.body.toString('utf8'))
-  await db.collection('paymentEvents').add({
-    event: event.event,
-    payload: event.payload || {},
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-
-  res.status(200).json({ ok: true })
 })
 
 app.use((err, req, res, next) => {

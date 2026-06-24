@@ -75,8 +75,13 @@ export function RoleRoute({ allowedRole, children }) {
   // Role not yet loaded from Firestore — brief moment only
   if (userRole === undefined) return <LoadingSpinner dark />
 
-  // No role set — treat as renter (role is now set at signup)
-  const resolvedRole = userRole ?? 'renter'
+  // Normalize role. Legacy accounts use 'owner' (== vendor); anything
+  // unrecognized falls back to 'renter'. This guarantees resolvedRole is always
+  // one of renter/vendor/admin, so the redirect below can never target the same
+  // route and loop forever (which renders a blank white page).
+  let resolvedRole = userRole ?? 'renter'
+  if (resolvedRole === 'owner') resolvedRole = 'vendor'
+  if (!['renter', 'vendor', 'admin'].includes(resolvedRole)) resolvedRole = 'renter'
 
   // Admin bypass — always allow access regardless of role
   if (resolvedRole === 'admin') return children

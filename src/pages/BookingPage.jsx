@@ -68,9 +68,8 @@ function getTotalDays(pickupDate, pickupTime, dropoffDate, dropoffTime) {
 
 // ── Payment methods ───────────────────────────────────────────────────────────
 const paymentMethods = [
-  { id: 'upi', icon: 'account_balance_wallet', label: 'UPI Payment', sub: 'Google Pay, PhonePe, Paytm' },
-  { id: 'card', icon: 'credit_card', label: 'Credit / Debit Card', sub: 'Visa, Mastercard, RuPay' },
-  { id: 'netbanking', icon: 'account_balance', label: 'Net Banking', sub: 'All Indian Banks' },
+  { id: 'pay_on_pickup', icon: 'payments', label: 'Pay on Pickup', sub: 'Cash / UPI when you collect the vehicle' },
+  { id: 'pay_on_return', icon: 'event_available', label: 'Pay on Return', sub: 'Settle the bill after your ride' },
 ]
 
 // ── Quick coupon chips ────────────────────────────────────────────────────────
@@ -89,7 +88,6 @@ export default function BookingPage() {
     addons,
     confirmed, bookingId, saving,
     saveBookingToFirestore,
-    initiateRazorpayPayment,
   } = useBooking()
 
   // ── Date/Time state ───────────────────────────────────────────────────────
@@ -235,23 +233,17 @@ export default function BookingPage() {
   const handleConfirmBooking = async () => {
     if (!vehicle) return
     if (!hasEnoughTokens) { toast.error('Insufficient tokens for this hourly booking'); return }
-    if (!import.meta.env.VITE_RAZORPAY_KEY_ID) {
-      toast.error('Razorpay key is not configured.')
-      return
-    }
 
-    initiateRazorpayPayment(vehicle, pricing, async (paymentRes) => {
-      const bid = await saveBookingToFirestore(vehicle, pricing, paymentRes)
-      if (bid) {
-        await sendNotification({
-          userId: vehicle.ownerId,
-          type: 'new_booking_request',
-          title: 'New Booking Request 🔔',
-          body: `${userDoc?.name || user.displayName || 'Someone'} wants to book your ${vehicle.name}.`,
-          actionUrl: '/vendor/dashboard',
-        })
-      }
-    })
+    const bid = await saveBookingToFirestore(vehicle, pricing)
+    if (bid) {
+      await sendNotification({
+        userId: vehicle.ownerId,
+        type: 'new_booking_request',
+        title: 'New Booking Request 🔔',
+        body: `${userDoc?.name || user.displayName || 'Someone'} wants to book your ${vehicle.name}.`,
+        actionUrl: '/vendor/dashboard',
+      })
+    }
   }
 
   if (loadingVehicle) {
@@ -605,7 +597,7 @@ export default function BookingPage() {
                   disabled={saving || !hasEnoughTokens}
                   className="h-12 px-10 bg-primary-container text-white font-bold rounded-lg shadow-lg hover:shadow-xl active:scale-95 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {saving ? 'Processing...' : `Pay ₹${total.toLocaleString('en-IN')}`}
+                  {saving ? 'Processing...' : `Confirm Booking · ₹${total.toLocaleString('en-IN')}`}
                   <span className="material-symbols-outlined">shield</span>
                 </button>
               </div>

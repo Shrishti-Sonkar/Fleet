@@ -44,30 +44,34 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // Safety net: never let the app hang on the loading screen, even if the
+    // Firestore user-doc read below is slow or never resolves.
     const timeout = setTimeout(() => {
       setLoading(false)
     }, 2000)
 
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      clearTimeout(timeout)
-      try {
-        if (firebaseUser) {
-          const uDoc = await fetchAndMigrateUserDoc(firebaseUser.uid)
-          setUserDoc(uDoc)
-          setUser(firebaseUser)
-        } else {
-          setUser(null)
-          setUserDoc(null)
-        }
-      } catch (err) {
-        console.error('Error in onAuthStateChanged auth listener:', err)
-        // Fallback: still authenticate user even if userDoc retrieval fails
-        if (firebaseUser) {
-          setUser(firebaseUser)
-        }
-      } finally {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      // Resolve the UI immediately based on auth state — do NOT block rendering
+      // on the Firestore document fetch (which can hang on slow networks/rules).
+      if (!firebaseUser) {
+        setUser(null)
+        setUserDoc(null)
+        clearTimeout(timeout)
         setLoading(false)
+        return
       }
+
+      setUser(firebaseUser)
+      clearTimeout(timeout)
+      setLoading(false)
+
+      // Fetch the user doc in the background; failures don't block the app.
+      fetchAndMigrateUserDoc(firebaseUser.uid)
+        .then((uDoc) => setUserDoc(uDoc))
+        .catch((err) => {
+          console.error('Error fetching user doc:', err)
+          setUserDoc(null)
+        })
     })
     return () => { clearTimeout(timeout); unsub() }
   }, [])

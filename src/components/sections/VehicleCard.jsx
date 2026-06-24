@@ -39,9 +39,11 @@ export default function VehicleCard({ vehicle }) {
   } = vehicle
 
   // Price mode (hourly / daily) — existing logic preserved
+  // Guard against vehicles missing dailyPrice so `.toLocaleString()` never crashes the page
+  const safeDailyPrice = Number(dailyPrice) || 0
   const displayPrice = priceMode === 'hourly'
-    ? (vehicle.hourlyPrice || Math.round(dailyPrice / 8))
-    : dailyPrice
+    ? (Number(vehicle.hourlyPrice) || Math.round(safeDailyPrice / 8))
+    : safeDailyPrice
   const priceLabel = priceMode === 'hourly' ? '/ hr' : '/ day'
 
   // Category badge (existing system badge, top-left inline within image padding)

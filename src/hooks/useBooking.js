@@ -8,7 +8,7 @@ export function useBooking() {
   const [step, setStep] = useState(1)
   const [pickupDate, setPickupDate] = useState('')
   const [dropoffDate, setDropoffDate] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('upi')
+  const [paymentMethod, setPaymentMethod] = useState('pay_on_pickup')
   const [addons, setAddons] = useState({ helmet: true, insurance: false })
   const [confirmed, setConfirmed] = useState(false)
   const [bookingId, setBookingId] = useState('')
@@ -45,24 +45,16 @@ export function useBooking() {
   const saveBookingToFirestore = async (
     vehicle,
     pricing,
-    paymentInfo = null,
   ) => {
     if (!user || !vehicle) return null
-    if (!paymentInfo?.razorpay_signature) {
-      toast.error('Secure payment verification is required.')
-      return null
-    }
 
     setSaving(true)
     try {
       const token = await user.getIdToken()
-      const data = await apiFetch('/api/payments/verify', {
+      const data = await apiFetch('/api/bookings/create', {
         token,
         method: 'POST',
         body: JSON.stringify({
-          razorpay_payment_id: paymentInfo.razorpay_payment_id,
-          razorpay_order_id: paymentInfo.razorpay_order_id,
-          razorpay_signature: paymentInfo.razorpay_signature,
           bookingDetails: buildBookingDetails(vehicle, pricing),
         }),
       })
@@ -70,7 +62,7 @@ export function useBooking() {
       setBookingId(data.bookingId)
       setConfirmed(true)
       setStep(4)
-      toast.success('Payment verified and booking confirmed!')
+      toast.success('Booking confirmed!')
       return data.bookingId
     } catch (err) {
       console.error('Booking save error:', err)
@@ -78,53 +70,6 @@ export function useBooking() {
       return null
     } finally {
       setSaving(false)
-    }
-  }
-
-  const initiateRazorpayPayment = async (vehicle, pricing, onSuccess) => {
-    try {
-      if (!window.Razorpay) {
-        throw new Error('Razorpay checkout script is not loaded.')
-      }
-
-      const token = await user.getIdToken()
-      const order = await apiFetch('/api/payments/order', {
-        token,
-        method: 'POST',
-        body: JSON.stringify({ bookingDetails: buildBookingDetails(vehicle, pricing) }),
-      })
-
-      const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'Fleet',
-        description: `Booking: ${vehicle.name}`,
-        image: `${window.location.origin}/favicon.svg`,
-        order_id: order.id,
-        handler: async function (response) {
-          await onSuccess({
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_signature: response.razorpay_signature,
-          })
-        },
-        prefill: {
-          name: userDoc?.name || '',
-          email: user?.email || '',
-          contact: userDoc?.phone || '',
-        },
-        theme: { color: '#ff6b00' },
-        modal: {
-          ondismiss: () => toast('Payment cancelled', { icon: '!' }),
-        },
-      }
-
-      const rzp = new window.Razorpay(options)
-      rzp.open()
-    } catch (err) {
-      console.error('Razorpay initialization error:', err)
-      toast.error(err.message || 'Payment initialization failed. Please try again.')
     }
   }
 
@@ -150,7 +95,6 @@ export function useBooking() {
     saving,
     confirmBooking,
     saveBookingToFirestore,
-    initiateRazorpayPayment,
     buildBookingDetails,
   }
 }

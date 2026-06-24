@@ -21,7 +21,7 @@ const pages = {
       ['Data we collect', 'Account details, contact information, KYC documents, booking history, payment references, vehicle details, and support messages.'],
       ['How we use data', 'We use data for authentication, fraud prevention, KYC review, booking operations, notifications, support, and legal compliance.'],
       ['Document storage', 'KYC and vehicle documents should be stored in protected Firebase Storage paths with access limited to the user and authorized admins.'],
-      ['Sharing', 'Relevant booking details are shared between renter and vendor. Payment processing is handled by Razorpay.'],
+      ['Sharing', 'Relevant booking details are shared between renter and vendor. Payment is settled directly between renter and vendor at pickup or return.'],
       ['Retention', 'Operational records are retained as needed for tax, dispute, safety, and regulatory purposes.'],
     ],
   },

@@ -211,7 +211,7 @@ export const generateInvoice = (booking, vehicle, user) => {
   doc.setTextColor(100, 100, 100)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'italic')
-  text(`Payment via: ${(booking.paymentMethod || 'Razorpay').toUpperCase()} · Ref: ${booking.paymentId || '—'}`,
+  text(`Payment: ${(booking.paymentMethod || 'pay_on_pickup').replace(/_/g, ' ').toUpperCase()} · Status: ${(booking.paymentStatus || 'pay_on_pickup').replace(/_/g, ' ').toUpperCase()}`,
     margin, y + 4)
 
   y += 16
