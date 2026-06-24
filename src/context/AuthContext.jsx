@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
+import { registerPush } from '../lib/push'
 
 const AuthContext = createContext(null)
 
@@ -65,6 +66,9 @@ export function AuthProvider({ children }) {
       clearTimeout(timeout)
       setLoading(false)
 
+      // Register for push notifications (no-ops if unsupported/not configured).
+      registerPush(firebaseUser.uid)
+
       // Fetch the user doc in the background; failures don't block the app.
       fetchAndMigrateUserDoc(firebaseUser.uid)
         .then((uDoc) => setUserDoc(uDoc))
@@ -81,6 +85,20 @@ export function AuthProvider({ children }) {
     if (!user) return
     const uDoc = await fetchAndMigrateUserDoc(user.uid)
     setUserDoc(uDoc)
+  }
+
+  // Switch the account between Rider and Vendor mode (one account, both modes).
+  const switchRole = async (target) => {
+    if (!user) return null
+    const next = target === 'vendor' ? 'vendor' : 'renter'
+    await setDoc(
+      doc(db, 'users', user.uid),
+      { role: next, roleSetAt: serverTimestamp() },
+      { merge: true },
+    )
+    const uDoc = await fetchAndMigrateUserDoc(user.uid)
+    setUserDoc(uDoc)
+    return next
   }
 
   const signup = async (email, password, name, phone, role = 'renter') => {
@@ -221,7 +239,7 @@ export function AuthProvider({ children }) {
       user, userDoc, loading,
       signup, signin, googleSignin, logout, resetPassword,
       sendOTP, verifyOTP,
-      refreshUserDoc, isAdmin, isOwner, isKycApproved,
+      refreshUserDoc, switchRole, isAdmin, isOwner, isKycApproved,
       userRole, isVendor, isRenter,
     }}>
       {loading ? (

@@ -39,6 +39,7 @@ service cloud.firestore {
         'role', 'roleSetAt',
         'kycStatus', 'aadhaarUrl', 'dlUrl', 'selfieUrl',
         'tokens', 'tokensUsed',
+        'fcmTokens',
         'updatedAt'
       ];
     }

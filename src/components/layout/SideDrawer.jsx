@@ -1,29 +1,40 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useTokens } from '../../hooks/useTokens'
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
 import toast from 'react-hot-toast'
 
-const NAV_ITEMS = [
-  { icon: 'home',             label: 'Home',           to: '/'           },
-  { icon: 'search',           label: 'Browse Vehicles',to: '/browse'     },
-  { icon: 'book_online',      label: 'My Bookings',    to: '/my-bookings'},
-  { icon: 'favorite',         label: 'My Wishlist',    to: '/wishlist'   },
-  { icon: 'directions_car',   label: 'List a Vehicle', to: '/host'       },
-  { icon: 'support_agent',    label: 'Help & Support', to: '/support'    },
-  { icon: 'info',             label: 'About Fleet',    to: '/about'      },
+// Role-aware navigation — riders only see rider features, vendors only vendor features
+const RENTER_NAV = [
+  { icon: 'home',           label: 'Home',            to: '/'            },
+  { icon: 'search',         label: 'Browse Vehicles', to: '/browse'      },
+  { icon: 'book_online',    label: 'My Trips',        to: '/my-bookings' },
+  { icon: 'favorite',       label: 'My Wishlist',     to: '/wishlist'    },
+  { icon: 'account_balance_wallet', label: 'Wallet & Tokens', to: '/wallet' },
+]
+
+const VENDOR_NAV = [
+  { icon: 'dashboard',        label: 'Dashboard',     to: '/vendor'            },
+  { icon: 'directions_car',   label: 'My Fleet',      to: '/vendor/dashboard'  },
+  { icon: 'add_circle',       label: 'Add Vehicle',   to: '/vendor/add-vehicle'},
+  { icon: 'payments',         label: 'Earnings',      to: '/vendor/earnings'   },
+  { icon: 'account_balance',  label: 'Payouts',       to: '/vendor/payouts'    },
+]
+
+const COMMON_NAV = [
+  { icon: 'support_agent',  label: 'Help & Support', to: '/support' },
+  { icon: 'info',           label: 'About Fleet',    to: '/about'   },
 ]
 
 export default function SideDrawer({ open, onClose }) {
-  const { user, userDoc, logout, refreshUserDoc } = useAuth()
+  const { user, userDoc, logout, switchRole, isAdmin } = useAuth()
   const { isDark, toggleTheme }   = useTheme()
   const { tokensRemaining }        = useTokens()
   const navigate  = useNavigate()
   const location  = useLocation()
   const drawerRef = useRef(null)
+  const [switching, setSwitching] = useState(false)
 
   // Close on route change
   useEffect(() => { onClose() }, [location.pathname]) // eslint-disable-line
@@ -61,26 +72,29 @@ export default function SideDrawer({ open, onClose }) {
     onClose()
   }
 
-  const handleCaptainMode = async () => {
-    if (!user) return
-    const newRole = userDoc?.role === 'captain' ? 'renter' : 'captain'
+  // One account, both modes — current mode derived from the stored role
+  // (legacy 'owner' counts as vendor).
+  const isVendorMode = userDoc?.role === 'vendor' || userDoc?.role === 'owner'
+
+  const handleSwitchMode = async () => {
+    if (!user || switching) return
+    const target = isVendorMode ? 'renter' : 'vendor'
+    setSwitching(true)
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        role: newRole,
-        updatedAt: serverTimestamp(),
-      })
-      await refreshUserDoc()
+      await switchRole(target)
       toast.success(
-        newRole === 'captain'
-          ? '🚗 Captain mode ON — Delivery vehicles unlocked!'
-          : 'Switched back to Renter mode'
+        target === 'vendor'
+          ? '🏪 Switched to Vendor mode'
+          : '🛵 Switched to Rider mode'
       )
+      navigate(target === 'vendor' ? '/vendor' : '/')
+      onClose()
     } catch {
-      toast.error('Failed to switch mode')
+      toast.error('Could not switch mode. Please try again.')
+    } finally {
+      setSwitching(false)
     }
   }
-
-  const isCaptain = userDoc?.role === 'captain'
 
   return (
     <>
@@ -156,9 +170,9 @@ export default function SideDrawer({ open, onClose }) {
           </div>
         )}
 
-        {/* Nav items */}
+        {/* Nav items — role-aware */}
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map((item) => (
+          {[...(isVendorMode ? VENDOR_NAV : RENTER_NAV), ...COMMON_NAV].map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -173,33 +187,27 @@ export default function SideDrawer({ open, onClose }) {
             </Link>
           ))}
 
-          {/* Captain mode */}
-          {user && (
-            <div className="mx-4 my-3 border border-outline-variant rounded-xl overflow-hidden">
-              <button
-                onClick={handleCaptainMode}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-container transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`material-symbols-outlined text-[22px] ${isCaptain ? 'text-primary-container' : 'text-secondary'}`}
-                    style={{ fontVariationSettings: isCaptain ? "'FILL' 1" : "'FILL' 0" }}
-                  >
-                    local_shipping
+          {/* Rider ⇄ Vendor mode switch (one account, both modes) */}
+          {user && !isAdmin() && (
+            <div className="mx-4 my-3 rounded-2xl overflow-hidden border border-primary-container/20 bg-primary-fixed/40 shadow-sm">
+              <div className="px-4 pt-3 pb-2">
+                <p className="text-[10px] uppercase tracking-wider text-secondary font-bold">Current mode</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[20px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    {isVendorMode ? 'storefront' : 'two_wheeler'}
                   </span>
-                  <div className="text-left">
-                    <p className={`text-label-md font-bold ${isCaptain ? 'text-primary' : 'text-on-surface'}`}>
-                      Captain Mode
-                    </p>
-                    <p className="text-[11px] text-secondary">
-                      {isCaptain ? 'ON — Delivery vehicles visible' : 'For gig workers'}
-                    </p>
-                  </div>
+                  <p className="font-bold text-on-surface">{isVendorMode ? 'Vendor' : 'Rider'}</p>
                 </div>
-                {/* Toggle pill */}
-                <div className={`w-11 h-6 rounded-full transition-all duration-300 relative ${isCaptain ? 'bg-primary-container' : 'bg-surface-container-high'}`}>
-                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${isCaptain ? 'left-5' : 'left-0.5'}`} />
-                </div>
+              </div>
+              <button
+                onClick={handleSwitchMode}
+                disabled={switching}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-container text-white hover:opacity-90 transition-all text-label-md font-bold disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                {switching
+                  ? 'Switching…'
+                  : isVendorMode ? 'Switch to Rider' : 'Switch to Vendor'}
               </button>
             </div>
           )}

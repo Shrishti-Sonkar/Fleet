@@ -65,18 +65,18 @@ function CountdownUnit({ value, label }) {
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   pending: {
-    label: 'UPCOMING RIDE', badgeBg: 'bg-yellow-500', badgeText: 'text-yellow-900',
-    cardBg: 'bg-[#1a1a2e]', textColor: 'text-white', subColor: 'text-white/60',
+    label: 'UPCOMING RIDE', badgeBg: 'bg-amber-400', badgeText: 'text-amber-900',
+    cardBg: 'bg-white border border-outline-variant', textColor: 'text-on-surface', subColor: 'text-secondary',
     timerLabel: 'Pick-up in',
   },
   approved: {
-    label: 'CONFIRMED RIDE', badgeBg: 'bg-yellow-400', badgeText: 'text-yellow-900',
-    cardBg: 'bg-[#1a1a2e]', textColor: 'text-white', subColor: 'text-white/60',
+    label: 'CONFIRMED RIDE', badgeBg: 'bg-amber-400', badgeText: 'text-amber-900',
+    cardBg: 'bg-white border border-outline-variant', textColor: 'text-on-surface', subColor: 'text-secondary',
     timerLabel: 'Pick-up in',
   },
   active: {
     label: 'ACTIVE RIDE', badgeBg: 'bg-green-500', badgeText: 'text-white',
-    cardBg: 'bg-[#0d2818]', textColor: 'text-white', subColor: 'text-white/60',
+    cardBg: 'bg-green-50 border border-green-200', textColor: 'text-on-surface', subColor: 'text-secondary',
     timerLabel: 'Drop-off due',
   },
 }
@@ -150,7 +150,7 @@ export default function ActiveBookingCard() {
         </div>
 
         {/* Info row — always visible */}
-        <div className="grid grid-cols-2 gap-px bg-white/5 border-t border-white/10">
+        <div className="grid grid-cols-2 gap-px bg-surface-container/50 border-t border-outline-variant">
           <div className="px-4 py-2.5">
             <p className={`text-[10px] uppercase tracking-wider ${config.subColor} mb-0.5`}>Pick-up time</p>
             <p className={`text-[13px] font-bold ${config.textColor}`}>
@@ -168,12 +168,12 @@ export default function ActiveBookingCard() {
         {/* Countdown */}
         {timeLeft && (
           <div
-            className={`flex items-center justify-between px-4 py-3 border-t border-white/10 ${isLate ? 'bg-red-900/30' : ''}`}
+            className={`flex items-center justify-between px-4 py-3 border-t border-outline-variant ${isLate ? 'bg-red-50' : ''}`}
           >
             <p className={`text-[11px] ${config.subColor}`}>
               {isLate ? '⚠ You are late by' : config.timerLabel}
             </p>
-            <div className="flex items-center gap-1 text-white">
+            <div className={`flex items-center gap-1 ${config.textColor}`}>
               {(timeLeft.days > 0) && (
                 <>
                   <CountdownUnit value={timeLeft.days} label="days" />
@@ -191,7 +191,7 @@ export default function ActiveBookingCard() {
 
         {/* Expanded details */}
         {expanded && (
-          <div className="border-t border-white/10 px-4 py-4 space-y-3">
+          <div className="border-t border-outline-variant px-4 py-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: 'Booking ID',   value: booking.bookingId || booking.id?.slice(0, 8).toUpperCase() },
@@ -226,7 +226,7 @@ export default function ActiveBookingCard() {
               ) : null}
               <button
                 onClick={(e) => { e.stopPropagation(); navigate('/my-bookings') }}
-                className="flex-1 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
+                className="flex-1 py-2.5 bg-surface-container hover:bg-surface-container-high text-on-surface font-bold rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all"
               >
                 <span className="material-symbols-outlined text-[16px]">description</span>
                 All Bookings

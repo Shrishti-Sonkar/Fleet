@@ -24,6 +24,7 @@ const VendorHomePage     = lazy(() => import('./pages/VendorHomePage'))
 const OwnerDashboard     = lazy(() => import('./pages/OwnerDashboard'))
 const HostPage           = lazy(() => import('./pages/HostPage'))
 const AddVehiclePage     = lazy(() => import('./pages/AddVehiclePage'))
+const VendorMapPage      = lazy(() => import('./pages/VendorMapPage'))
 const ProfilePage        = lazy(() => import('./pages/ProfilePage'))
 const AboutPage          = lazy(() => import('./pages/AboutPage'))
 const SupportPage        = lazy(() => import('./pages/SupportPage'))
@@ -121,6 +122,9 @@ export default function App() {
           } />
           <Route path={ROUTES.VENDOR_ADD} element={
             <RoleRoute allowedRole="vendor"><AddVehiclePage /></RoleRoute>
+          } />
+          <Route path={ROUTES.VENDOR_MAP} element={
+            <RoleRoute allowedRole="vendor"><VendorMapPage /></RoleRoute>
           } />
           <Route path={ROUTES.VENDOR_EARNINGS} element={
             <RoleRoute allowedRole="vendor"><VendorEarningsPage /></RoleRoute>

@@ -35,15 +35,15 @@ export default function HomePage() {
       {/* Popular Vehicles */}
       <PopularVehicles vehicles={featuredVehicles} />
 
-      {/* Cities (Dark) */}
-      <section className="py-section-padding-lg bg-[#111111] text-white">
+      {/* Cities */}
+      <section className="py-section-padding-lg bg-surface-container">
         <div className="max-w-screen-2xl mx-auto px-gutter">
           <div className="flex flex-col items-center text-center mb-16">
-            <span className="inline-block px-4 py-1.5 bg-white/10 text-white rounded-full font-label-md text-label-md font-bold tracking-wide uppercase mb-4">
+            <span className="inline-block px-4 py-1.5 bg-primary-fixed text-primary rounded-full font-label-md text-label-md font-bold tracking-wide uppercase mb-4">
               Explore Uttarakhand
             </span>
-            <h2 className="font-headline-md text-headline-md mb-4">Pick up from the Peaks</h2>
-            <p className="text-on-surface-variant opacity-60 font-body-lg text-body-lg max-w-2xl">
+            <h2 className="font-headline-md text-headline-md mb-4 text-on-surface">Pick up from the Peaks</h2>
+            <p className="text-on-surface-variant font-body-lg text-body-lg max-w-2xl">
               Currently dominating the roads of Uttarakhand. Coming soon to other hill stations across India.
             </p>
           </div>

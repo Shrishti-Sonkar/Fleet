@@ -26,7 +26,7 @@ export default function RenterNav() {
             key={tab.path}
             to={tab.path}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full transition-colors relative ${
-              isActive ? 'text-black' : 'text-gray-400'
+              isActive ? 'text-primary' : 'text-gray-400'
             }`}
           >
             <span
@@ -40,7 +40,7 @@ export default function RenterNav() {
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
-            <span className={`text-[10px] font-semibold ${isActive ? 'text-black' : 'text-gray-400'}`}>
+            <span className={`text-[10px] font-semibold ${isActive ? 'text-primary' : 'text-gray-400'}`}>
               {tab.label}
             </span>
           </Link>

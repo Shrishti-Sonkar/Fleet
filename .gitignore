@@ -34,6 +34,8 @@ backend/.env
 !jsconfig.json
 !vercel.json
 !cors.json
+!firebase.json
+!firestore.indexes.json
 
 # IDEs and editors
 .idea/

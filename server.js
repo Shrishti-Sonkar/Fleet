@@ -186,6 +186,38 @@ async function getUserDoc(uid) {
   return snap.exists ? { id: snap.id, ...snap.data() } : null
 }
 
+// Send an FCM push to all of a user's registered devices. Prunes dead tokens.
+async function sendPushToUser(uid, { title, body, actionUrl = '' }) {
+  try {
+    const userDoc = await getUserDoc(uid)
+    const tokens = Array.isArray(userDoc?.fcmTokens) ? userDoc.fcmTokens.filter(Boolean) : []
+    if (tokens.length === 0) return
+
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data: { actionUrl: String(actionUrl || '') },
+      webpush: { fcmOptions: { link: actionUrl || '/' } },
+    })
+
+    // Remove tokens that are no longer valid so the list doesn't grow stale.
+    const stale = []
+    response.responses.forEach((r, i) => {
+      const code = r.error?.code
+      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
+        stale.push(tokens[i])
+      }
+    })
+    if (stale.length > 0) {
+      await db.collection('users').doc(uid).update({
+        fcmTokens: admin.firestore.FieldValue.arrayRemove(...stale),
+      })
+    }
+  } catch (error) {
+    console.error('sendPushToUser failed:', error.message)
+  }
+}
+
 async function isAdminUser(uid) {
   const userDoc = await getUserDoc(uid)
   return userDoc?.role === 'admin'
@@ -482,6 +514,34 @@ app.post('/api/bookings/:id/review', requireAuth, async (req, res) => {
     res.status(200).json({ success: true })
   } catch (error) {
     bookingError(res, error, 'Unable to submit review')
+  }
+})
+
+// Create an in-app notification AND deliver a push to the target user.
+app.post('/api/notifications/send', requireAuth, async (req, res) => {
+  try {
+    const { userId, type, title, body, actionUrl = '' } = req.body
+    if (!userId || !title) {
+      return res.status(400).json({ error: 'userId and title are required' })
+    }
+
+    await db.collection('notifications').add({
+      userId,
+      type: type || 'general',
+      title,
+      body: body || '',
+      actionUrl,
+      read: false,
+      createdBy: req.user.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // Fire-and-forget push; never let a push failure fail the request.
+    sendPushToUser(userId, { title, body, actionUrl })
+
+    res.status(200).json({ success: true })
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Unable to send notification' })
   }
 })
 
