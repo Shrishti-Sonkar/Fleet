@@ -112,6 +112,18 @@ app.use(cors({
 app.use(express.json({ limit: '1mb', strict: true }))
 app.use('/api', rateLimit({ max: 180 }))
 
+// ── Static file serving (Render / Railway / any Node host) ──────────────────
+// Serve the built Vite React app from dist/ so that a single Render Web Service
+// can handle both the API and the SPA without a separate static site.
+const distPath = path.resolve(process.cwd(), 'dist')
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath, {
+    maxAge: '1y',
+    immutable: true,
+    index: false,           // we handle / via the SPA fallback below
+  }))
+}
+
 let firebaseInitError = null
 let firebaseMode = 'not_configured'
 
@@ -1166,6 +1178,24 @@ app.get('/api/payments/booking/:id/status', requireAuth, async (req, res) => {
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.status ? error.message : 'Unable to read payment status' })
   }
+})
+
+// ── SPA fallback ────────────────────────────────────────────────────────────
+// Any request that didn't match an /api route or a static file in dist/ should
+// receive the React app's index.html so that client-side routing can take over.
+const indexHtmlPath = path.join(distPath, 'index.html')
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API route not found' })
+})
+
+app.get('*', (req, res) => {
+  if (fs.existsSync(indexHtmlPath)) {
+    return res.sendFile(indexHtmlPath)
+  }
+  res.status(503).send(
+    'Frontend not built. Run "npm run build" to generate the dist/ folder.'
+  )
 })
 
 app.use((err, req, res, next) => {
