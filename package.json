@@ -19,7 +19,7 @@
     "express": "^4.21.2",
     "firebase": "^12.13.0",
     "firebase-admin": "^14.2.0",
-    "framer-motion": "^12.40.0",
+    "framer-motion": "^14.14.0",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "razorpay": "^2.9.8",
