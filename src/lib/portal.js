@@ -1,21 +1,32 @@
 /**
- * Determines whether the application is running in Customer Marketplace mode
- * (`fleetmobilities.in`) or Standalone Vendor Partner Portal mode
- * (`fleetmobilities.info` or `vendor.*` subdomains).
+ * Determines which portal the application should render based on domain/subdomain:
+ *   - `admin.*` (e.g. `admin.fleetmobilities.in`, `admin.fleetmobilities.info`) -> `'admin'`
+ *   - `fleetmobilities.info` or `vendor.*`                                     -> `'vendor'`
+ *   - `fleetmobilities.in` (default)                                           -> `'customer'`
  *
- * In local development, you can also switch portals via:
- *   - `?portal=vendor` / `?portal=customer` query parameter (persisted per tab)
- *   - `vendor.localhost` hostname
- *   - `VITE_PORTAL_MODE=vendor` environment variable
+ * Also supports `/admin` path access on the primary domain and local dev overrides:
+ *   - `?portal=admin` / `?portal=vendor` / `?portal=customer`
+ *   - `VITE_PORTAL_MODE=admin|vendor|customer`
  */
 const PORTAL_STORAGE_KEY = 'fleet_portal_mode'
 
+export function isAdminPath() {
+  if (typeof window === 'undefined') return false
+  const p = window.location.pathname
+  return p === '/admin' || p.startsWith('/admin/')
+}
+
 export function getPortalMode() {
   if (typeof window === 'undefined') {
-    return import.meta.env.VITE_PORTAL_MODE === 'vendor' ? 'vendor' : 'customer'
+    const envMode = import.meta.env.VITE_PORTAL_MODE
+    return ['admin', 'vendor', 'customer'].includes(envMode) ? envMode : 'customer'
   }
 
   const host = window.location.hostname.toLowerCase()
+
+  if (host.startsWith('admin.')) {
+    return 'admin'
+  }
 
   if (
     host === 'fleetmobilities.info' ||
@@ -26,27 +37,33 @@ export function getPortalMode() {
   }
 
   if (host === 'fleetmobilities.in' || host.endsWith('.fleetmobilities.in')) {
-    return 'customer'
+    return isAdminPath() ? 'admin' : 'customer'
   }
 
   try {
     const params = new URLSearchParams(window.location.search)
     const override = params.get('portal')
-    if (override === 'vendor' || override === 'customer') {
+    if (['admin', 'vendor', 'customer'].includes(override)) {
       window.sessionStorage.setItem(PORTAL_STORAGE_KEY, override)
       return override
     }
+    if (isAdminPath()) return 'admin'
     const stored = window.sessionStorage.getItem(PORTAL_STORAGE_KEY)
-    if (stored === 'vendor' || stored === 'customer') {
+    if (['admin', 'vendor', 'customer'].includes(stored)) {
       return stored
     }
   } catch {
     // Ignore storage access errors in restricted browser contexts
   }
 
-  return import.meta.env.VITE_PORTAL_MODE === 'vendor' ? 'vendor' : 'customer'
+  const envMode = import.meta.env.VITE_PORTAL_MODE
+  return ['admin', 'vendor', 'customer'].includes(envMode) ? envMode : 'customer'
 }
 
 export function isVendorPortal() {
   return getPortalMode() === 'vendor'
+}
+
+export function isAdminPortal() {
+  return getPortalMode() === 'admin'
 }

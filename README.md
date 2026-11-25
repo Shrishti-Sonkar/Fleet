@@ -70,13 +70,14 @@
 
 ---
 
-## 🌐 Dual-Domain Routing
+## 🌐 Multi-Domain Routing
 
-Both portals run from the unified `main` branch and a single Azure App Service deployment (`src/lib/portal.js`):
+All portals run from the unified `main` branch and a single Azure App Service deployment (`src/lib/portal.js`):
 - **`fleetmobilities.in`** → Customer Rental Marketplace
 - **`fleetmobilities.info`** (or any `vendor.*` subdomain) → Standalone Vendor Partner Portal (`src/vendor/`)
+- **`admin.fleetmobilities.in`** or **`fleetmobilities.in/admin`** → Restricted Admin Console (`src/admin/`)
 
-In local development, append `?portal=vendor` (or `?portal=customer`) to `http://localhost:5173` to preview either portal.
+In local development, append `?portal=vendor`, `?portal=admin`, or `?portal=customer` to `http://localhost:5173` (or visit `/admin`) to preview any portal.
 
 ---
 

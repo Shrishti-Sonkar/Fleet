@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import SearchWidget from '@/components/sections/SearchWidget'
+import { useSiteConfig } from '@/hooks/useSiteConfig'
 
 const container = {
     hidden: { opacity: 0 },
@@ -15,6 +16,8 @@ const item = {
 }
 
 export default function HeroSection() {
+    const siteConfig = useSiteConfig()
+
     return (
         <section className="relative min-h-[600px] flex items-center bg-surface-container-lowest overflow-hidden">
             <div className="max-w-screen-2xl mx-auto px-gutter grid md:grid-cols-12 items-center gap-12 w-full">
@@ -26,8 +29,22 @@ export default function HeroSection() {
                     initial="hidden"
                     animate="show"
                 >
+                    {siteConfig.announcementEnabled && siteConfig.announcementText && (
+                        <motion.div variants={item} className="px-4 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed text-xs font-bold tracking-wide text-center">
+                            {siteConfig.announcementText}
+                        </motion.div>
+                    )}
 
-
+                    {(siteConfig.heroTitle || siteConfig.heroSubtitle) && (
+                        <motion.div variants={item} className="text-center space-y-2">
+                            {siteConfig.heroTitle && (
+                                <h1 className="text-3xl md:text-5xl font-black text-on-surface tracking-tight">{siteConfig.heroTitle}</h1>
+                            )}
+                            {siteConfig.heroSubtitle && (
+                                <p className="text-sm md:text-base text-on-surface-variant max-w-xl mx-auto">{siteConfig.heroSubtitle}</p>
+                            )}
+                        </motion.div>
+                    )}
 
                     <motion.div variants={item} className="w-full flex justify-center">
                         <SearchWidget />

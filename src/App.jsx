@@ -1,15 +1,16 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
-import { isVendorPortal } from '@/lib/portal'
+import { isAdminPath, isAdminPortal, isVendorPortal } from '@/lib/portal'
 import { useAuth } from './context/AuthContext'
 import {
-  ProtectedRoute, VerifiedRoute, AdminRoute, RoleRoute,
+  ProtectedRoute, VerifiedRoute, RoleRoute,
 } from './components/ProtectedRoute'
 import RenterNav from './components/RenterNav'
 import VendorNav from './components/VendorNav'
 
 const VendorPortalApp = lazy(() => import('./vendor/VendorPortalApp'))
+const AdminPortalApp = lazy(() => import('./admin/AdminPortalApp'))
 
 // Eager import: no splash
 import LoginPage from './pages/LoginPage'
@@ -33,7 +34,6 @@ const ProfilePage        = lazy(() => import('./pages/ProfilePage'))
 const AboutPage          = lazy(() => import('./pages/AboutPage'))
 const SupportPage        = lazy(() => import('./pages/SupportPage'))
 const VerificationPage   = lazy(() => import('./pages/VerificationPage'))
-const AdminDashboard     = lazy(() => import('./pages/AdminDashboard'))
 const EditProfilePage    = lazy(() => import('./pages/EditProfilePage'))
 const NotificationsPage  = lazy(() => import('./pages/NotificationsPage'))
 const LegalPage          = lazy(() => import('./pages/LegalPage'))
@@ -41,7 +41,6 @@ const NotFoundPage       = lazy(() => import('./pages/NotFoundPage'))
 const BookingDetailPage  = lazy(() => import('./pages/BookingDetailPage'))
 const VendorEarningsPage = lazy(() => import('./pages/VendorEarningsPage'))
 const VendorPayoutsPage  = lazy(() => import('./pages/VendorPayoutsPage'))
-const AdminOpsPage       = lazy(() => import('./pages/AdminOpsPage'))
 
 // Loading fallback
 function PageLoader() {
@@ -68,6 +67,14 @@ function RoleNav() {
 }
 
 export default function App() {
+  if (isAdminPortal()) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <AdminPortalApp basename={isAdminPath() ? '/admin' : '/'} />
+      </Suspense>
+    )
+  }
+
   if (isVendorPortal()) {
     return (
       <Suspense fallback={<PageLoader />}>
@@ -161,20 +168,6 @@ export default function App() {
           } />
           <Route path="/notifications" element={
             <ProtectedRoute><NotificationsPage /></ProtectedRoute>
-          } />
-
-          {/* ── ADMIN ── */}
-          <Route path={ROUTES.ADMIN} element={
-            <AdminRoute><AdminDashboard /></AdminRoute>
-          } />
-          <Route path={ROUTES.ADMIN_REPORTS} element={
-            <AdminRoute><AdminOpsPage /></AdminRoute>
-          } />
-          <Route path={ROUTES.ADMIN_COUPONS} element={
-            <AdminRoute><AdminOpsPage /></AdminRoute>
-          } />
-          <Route path={ROUTES.ADMIN_SETTINGS} element={
-            <AdminRoute><AdminOpsPage /></AdminRoute>
           } />
 
           {/* ── CATCH ALL ── */}

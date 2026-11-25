@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
+import { useSiteConfig } from '@/hooks/useSiteConfig'
 
 export default function Footer() {
+  const siteConfig = useSiteConfig()
+
   return (
     <footer className="w-full py-section-padding-lg bg-surface-container-low border-t border-outline-variant">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-gutter max-w-screen-2xl mx-auto px-gutter mb-12">
@@ -9,7 +12,7 @@ export default function Footer() {
         <div className="col-span-2 space-y-6">
           <Link to={ROUTES.HOME} className="font-headline-sm text-headline-sm font-black text-primary block">Fleet</Link>
           <p className="text-on-surface-variant max-w-xs font-body-lg text-body-lg">
-            Redefining exploration in the Himalayas through autonomous, premium rentals.
+            {siteConfig.footerTagline}
           </p>
           <div className="flex gap-4">
             <span className="material-symbols-outlined text-primary cursor-pointer hover:scale-110 transition-transform">public</span>

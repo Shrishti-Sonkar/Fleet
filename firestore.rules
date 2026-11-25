@@ -120,18 +120,21 @@ service cloud.firestore {
       // Vehicle documents are listing data, but still require authentication
       // until a separate publicVehicles projection is introduced.
       allow read: if isLoggedIn();
-      allow create: if isVendor()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.keys().hasOnly([
-          'name', 'type', 'brand', 'model', 'year', 'fuelType', 'seats',
-          'city', 'useCase', 'description', 'regNo', 'category', 'cc',
-          'mileage', 'dailyPrice', 'weeklyPrice', 'pricePerHour',
-          'pricePerMonth', 'securityDeposit', 'imageUrl', 'images',
-          'ownerId', 'ownerName', 'hostName', 'hostRating', 'hostReviews',
-          'features', 'status', 'available', 'rating', 'reviewCount',
-          'badge', 'createdAt', 'updatedAt'
-        ]);
+      allow create: if isAdmin()
+        || (
+          isVendor()
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.keys().hasOnly([
+            'name', 'type', 'brand', 'model', 'year', 'fuelType', 'seats',
+            'city', 'useCase', 'description', 'regNo', 'category', 'cc',
+            'mileage', 'dailyPrice', 'weeklyPrice', 'pricePerHour',
+            'pricePerMonth', 'securityDeposit', 'imageUrl', 'images',
+            'ownerId', 'ownerName', 'hostName', 'hostRating', 'hostReviews',
+            'features', 'status', 'available', 'rating', 'reviewCount',
+            'badge', 'createdAt', 'updatedAt'
+          ])
+        );
       allow update: if isAdmin()
         || (
           isVendor()
@@ -217,6 +220,16 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if isLoggedIn();
       allow write: if isAdmin();
+    }
+
+    match /siteContent/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Server-only admin ID/password store: strictly unreadable and unwritable by all clients.
+    match /adminCredentials/{adminId} {
+      allow read, write: if false;
     }
 
     match /paymentEvents/{eventId} {

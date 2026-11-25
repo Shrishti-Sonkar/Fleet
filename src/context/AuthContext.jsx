@@ -12,9 +12,11 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  signInWithCustomToken,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
+import { apiFetch } from '../lib/api'
 import { registerPush } from '../lib/push'
 
 const AuthContext = createContext(null)
@@ -222,6 +224,18 @@ export function AuthProvider({ children }) {
     return cred
   }
 
+  const adminSignin = async (adminId, password) => {
+    const data = await apiFetch('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ adminId, password }),
+    })
+    await setPersistence(auth, browserSessionPersistence)
+    const cred = await signInWithCustomToken(auth, data.customToken)
+    const uDoc = await fetchAndMigrateUserDoc(cred.user.uid)
+    setUserDoc(uDoc ?? { uid: cred.user.uid, role: 'admin', adminId: data.adminId, name: data.name })
+    return cred
+  }
+
   const isAdmin = () => userDoc?.role === 'admin'
   const isOwner = () => userDoc?.role === 'owner' || userDoc?.role === 'admin'
   const isKycApproved = () => userDoc?.kycStatus === 'approved'
@@ -236,7 +250,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, userDoc, loading,
-      signup, signin, googleSignin, logout, resetPassword,
+      signup, signin, googleSignin, adminSignin, logout, resetPassword,
       sendOTP, verifyOTP,
       refreshUserDoc, switchRole, isAdmin, isOwner, isKycApproved,
       userRole, isVendor, isRenter,

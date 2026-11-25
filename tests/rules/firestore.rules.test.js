@@ -48,6 +48,10 @@ before(async () => {
       ownerId: 'vendor',
       status: 'pending',
     })
+    await setDoc(doc(adminDb, 'adminCredentials/root'), {
+      passwordHash: 'secret-hash',
+      active: true,
+    })
   })
 })
 
@@ -84,5 +88,13 @@ test('booking reads are limited to participants', { skip: !emulatorConfigured },
   const outsiderDb = testEnv.authenticatedContext('outsider').firestore()
   await assertSucceeds(getDoc(doc(renterDb, 'bookings/booking-1')))
   await assertFails(getDoc(doc(outsiderDb, 'bookings/booking-1')))
+})
+
+test('adminCredentials cannot be read or written by any client', { skip: !emulatorConfigured }, async () => {
+  const anonDb = testEnv.unauthenticatedContext().firestore()
+  const renterDb = testEnv.authenticatedContext('renter').firestore()
+  await assertFails(getDoc(doc(anonDb, 'adminCredentials/root')))
+  await assertFails(getDoc(doc(renterDb, 'adminCredentials/root')))
+  await assertFails(setDoc(doc(renterDb, 'adminCredentials/forged'), { password: '123', active: true }))
 })
 

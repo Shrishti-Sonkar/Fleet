@@ -2,9 +2,10 @@
 
 Fleet runs as a unified Node.js service (`server.js`) that serves both the Express/Firebase Admin API (`/api/*`) and the Rsbuild-compiled React frontend (`dist/`).
 
-A single Azure App Service (Linux, Node 22 LTS) hosts both portals using domain-based routing (`src/lib/portal.js`):
-- `fleetmobilities.in` (and `www.fleetmobilities.in`) $\rightarrow$ Customer Marketplace
-- `fleetmobilities.info` (or any `vendor.*` subdomain) $\rightarrow$ Standalone Vendor Partner Portal
+A single Azure App Service (Linux, Node 22 LTS) hosts all three portals using domain/path routing (`src/lib/portal.js`):
+- `fleetmobilities.in` (and `www.fleetmobilities.in`) → Customer Marketplace
+- `fleetmobilities.info` (or any `vendor.*` subdomain) → Standalone Vendor Partner Portal
+- `admin.fleetmobilities.in` (or `fleetmobilities.in/admin`) → Restricted Admin Console (ID + Password only, no public sign-up)
 
 ## 1. Secrets and Azure App Service Configuration
 
@@ -27,14 +28,26 @@ In **Azure Portal → App Service → Settings → Environment variables**, set:
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
-- `CORS_ORIGINS=https://fleetmobilities.in,https://www.fleetmobilities.in,https://fleetmobilities.info,https://www.fleetmobilities.info`
+- `CORS_ORIGINS=https://fleetmobilities.in,https://www.fleetmobilities.in,https://admin.fleetmobilities.in,https://fleetmobilities.info,https://www.fleetmobilities.info`
 
 In **GitHub → Repository Settings → Secrets and variables → Actions**:
 
 - **Variables**: `AZURE_WEBAPP_NAME`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_VAPID_KEY`
 - **Secret**: `AZURE_WEBAPP_PUBLISH_PROFILE` (downloaded from Azure App Service Overview → Download publish profile)
 
-## 2. Azure App Service Setup & Custom Domains
+## 2. Setting Initial Admin ID & Password in Firebase
+
+Admin credentials live in Firestore under `adminCredentials/{adminId}` (strictly locked with `allow read, write: if false;` in `firestore.rules` so no client can ever access them).
+
+1. Open **Firebase Console → Firestore Database → Start collection** `adminCredentials`.
+2. Set **Document ID** to your chosen Admin ID (for example `fleet-root`).
+3. Add fields:
+   - `password` (string): your chosen secret password (automatically upgraded to a salted `scrypt` hash on first login)
+   - `active` (boolean): `true`
+   - `name` (string): `"Super Admin"`
+4. Sign in at `https://admin.fleetmobilities.in` or `https://fleetmobilities.in/admin`.
+
+## 3. Azure App Service Setup & Custom Domains
 
 1. Create an **Azure App Service**:
    - **Publish**: Code
@@ -44,9 +57,9 @@ In **GitHub → Repository Settings → Secrets and variables → Actions**:
    - **Startup Command**: `npm start`
    - **Health check path**: `/api/health`
 2. Add Custom Domains in **Azure Portal → Custom domains**:
-   - Bind `fleetmobilities.in`, `www.fleetmobilities.in`, `fleetmobilities.info`, `www.fleetmobilities.info` (or `vendor.fleetmobilities.in`) using the `A`/`CNAME` and `asuid` `TXT` records shown by Azure at your DNS registrar.
+   - Bind `fleetmobilities.in`, `www.fleetmobilities.in`, `admin.fleetmobilities.in`, `fleetmobilities.info`, and `www.fleetmobilities.info` using the `A`/`CNAME` and `asuid` `TXT` records shown by Azure at your DNS registrar.
    - Bind a free **App Service Managed Certificate (SSL/TLS)** for each hostname.
-3. Add both domains to **Firebase Console → Authentication → Settings → Authorized domains** (`fleetmobilities.in`, `www.fleetmobilities.in`, `fleetmobilities.info`, `www.fleetmobilities.info`) so Google/Phone Auth works on both domains.
+3. Add all hostnames to **Firebase Console → Authentication → Settings → Authorized domains** (`fleetmobilities.in`, `www.fleetmobilities.in`, `admin.fleetmobilities.in`, `fleetmobilities.info`, `www.fleetmobilities.info`).
 
 ## 3. Required Release Checks
 

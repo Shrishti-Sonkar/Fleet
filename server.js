@@ -89,8 +89,11 @@ const defaultOrigins = [
   'http://localhost:5173',
   'https://fleetmobilities.in',
   'https://www.fleetmobilities.in',
+  'https://admin.fleetmobilities.in',
+  'https://vendor.fleetmobilities.in',
   'https://fleetmobilities.info',
   'https://www.fleetmobilities.info',
+  'https://admin.fleetmobilities.info',
 ].join(',')
 
 const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins)
@@ -363,6 +366,46 @@ async function sendPushToUser(uid, { title, body, actionUrl = '' }) {
 async function isAdminUser(uid) {
   const userDoc = await getUserDoc(uid)
   return userDoc?.role === 'admin'
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    if (!req.user?.uid) return res.status(401).json({ error: 'Authentication required' })
+    const allowed = req.user.admin === true || (await isAdminUser(req.user.uid))
+    if (!allowed) return res.status(403).json({ error: 'Admin access required' })
+    return next()
+  } catch (error) {
+    console.error('Admin verification error:', error)
+    return res.status(500).json({ error: 'Unable to verify admin privileges' })
+  }
+}
+
+function hashAdminPassword(plainPassword, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(String(plainPassword), salt, 64).toString('hex')
+  return { salt, hash }
+}
+
+function verifyAdminPassword(plainPassword, record) {
+  if (!record || record.active === false) return { valid: false, needsUpgrade: false }
+  const input = String(plainPassword || '')
+  if (!input) return { valid: false, needsUpgrade: false }
+
+  if (record.passwordHash && record.passwordSalt) {
+    const derived = crypto.scryptSync(input, String(record.passwordSalt), 64)
+    const stored = Buffer.from(String(record.passwordHash), 'hex')
+    if (derived.length !== stored.length) return { valid: false, needsUpgrade: false }
+    return { valid: crypto.timingSafeEqual(derived, stored), needsUpgrade: false }
+  }
+
+  if (typeof record.password === 'string' && record.password.length > 0) {
+    const a = Buffer.from(input, 'utf8')
+    const b = Buffer.from(record.password, 'utf8')
+    if (a.length !== b.length) return { valid: false, needsUpgrade: false }
+    const valid = crypto.timingSafeEqual(a, b)
+    return { valid, needsUpgrade: valid }
+  }
+
+  return { valid: false, needsUpgrade: false }
 }
 
 async function requireBookingAccess(bookingId, uid, { owner = false, renter = false, admin: allowAdmin = true } = {}) {
@@ -810,6 +853,35 @@ app.post('/api/bookings/:id/regenerate-code', requireAuth, async (req, res) => {
   }
 })
 
+// ── Public Site Config (for CMS-editable content on customer/vendor sites) ───
+app.get('/api/public/site-config', async (req, res) => {
+  try {
+    const [settingsSnap, contentSnap] = await Promise.all([
+      db.collection('settings').doc('platform').get(),
+      db.collection('siteContent').doc('homepage').get(),
+    ])
+    const settings = settingsSnap.exists ? settingsSnap.data() : {}
+    const content = contentSnap.exists ? contentSnap.data() : {}
+    return res.json({
+      supportEmail: settings.supportEmail || 'help@fleet.in',
+      supportPhone: settings.supportPhone || '+91 98765 43210',
+      gstRate: settings.gstRate ?? 0.18,
+      platformFee: settings.platformFee ?? 99,
+      announcementEnabled: Boolean(content.announcementEnabled),
+      announcementText: content.announcementText || '',
+      heroTitle: content.heroTitle || '',
+      heroSubtitle: content.heroSubtitle || '',
+      footerTagline: content.footerTagline || 'Redefining exploration in the Himalayas through autonomous, premium rentals.',
+      cities: Array.isArray(content.cities) && content.cities.length > 0
+        ? content.cities
+        : ['Dehradun', 'Mussoorie', 'Rishikesh'],
+    })
+  } catch (error) {
+    console.error('Read public site config error:', error)
+    return res.status(500).json({ error: 'Unable to load site configuration' })
+  }
+})
+
 // ── Payment Settings ────────────────────────────────────────────────────────
 app.get('/api/admin/payment-settings', requireAuth, async (req, res) => {
   try {
@@ -817,10 +889,13 @@ app.get('/api/admin/payment-settings', requireAuth, async (req, res) => {
     const settings = snap.exists ? snap.data() : {}
     res.json({
       tokenAmountType: settings.tokenAmountType || 'fixed',
-      tokenFixedAmount: settings.tokenFixedAmount || 500,
-      tokenPercentage: settings.tokenPercentage || 20,
-      platformCommissionPercent: settings.platformCommissionPercent || 15,
-      gstRate: settings.gstRate || 0.18,
+      tokenFixedAmount: settings.tokenFixedAmount ?? 500,
+      tokenPercentage: settings.tokenPercentage ?? 20,
+      platformCommissionPercent: settings.platformCommissionPercent ?? 15,
+      gstRate: settings.gstRate ?? 0.18,
+      platformFee: settings.platformFee ?? 99,
+      supportEmail: settings.supportEmail || 'help@fleet.in',
+      supportPhone: settings.supportPhone || '+91 98765 43210',
     })
   } catch (error) {
     console.error('Read payment settings error:', error)
@@ -828,18 +903,34 @@ app.get('/api/admin/payment-settings', requireAuth, async (req, res) => {
   }
 })
 
-app.put('/api/admin/payment-settings', requireAuth, async (req, res) => {
+app.put('/api/admin/payment-settings', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const uid = req.user.uid
-    if (!(await isAdminUser(uid))) return res.status(403).json({ error: 'Admin access required' })
-    const { tokenAmountType, tokenFixedAmount, tokenPercentage, platformCommissionPercent, gstRate, supportEmail } = req.body
+    const {
+      tokenAmountType,
+      tokenFixedAmount,
+      tokenPercentage,
+      platformCommissionPercent,
+      gstRate,
+      platformFee,
+      supportEmail,
+      supportPhone,
+    } = req.body
+    const parsedCommission = Number(platformCommissionPercent)
+    const commission = Number.isFinite(parsedCommission)
+      ? Math.min(100, Math.max(0, parsedCommission))
+      : 15
+    const parsedGst = Number(gstRate)
+    const safeGst = Number.isFinite(parsedGst) ? Math.min(1, Math.max(0, parsedGst)) : 0.18
+
     await db.collection('settings').doc('platform').set({
-      tokenAmountType: tokenAmountType || 'fixed',
-      tokenFixedAmount: Number(tokenFixedAmount) || 500,
-      tokenPercentage: Number(tokenPercentage) || 20,
-      platformCommissionPercent: Number(platformCommissionPercent) || 15,
-      gstRate: Number(gstRate) || 0.18,
-      supportEmail: supportEmail || 'help@fleet.in',
+      tokenAmountType: tokenAmountType === 'percentage' ? 'percentage' : 'fixed',
+      tokenFixedAmount: Number(tokenFixedAmount ?? 500),
+      tokenPercentage: Number(tokenPercentage ?? 20),
+      platformCommissionPercent: commission,
+      gstRate: safeGst,
+      platformFee: Number(platformFee ?? 99),
+      supportEmail: String(supportEmail || 'help@fleet.in').trim(),
+      supportPhone: String(supportPhone || '+91 98765 43210').trim(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true })
     res.json({ success: true })
@@ -1109,7 +1200,7 @@ app.post('/api/payments/verify', requireAuth, async (req, res) => {
   }
 })
 
-// Internal: Split payment between platform and vendor
+// Internal: Split payment between platform and vendor (supports vendor-by-vendor split override)
 async function splitPayment(bookingId, paymentId, totalAmount, ownerId) {
   try {
     const bookingRef = db.collection('bookings').doc(bookingId)
@@ -1117,17 +1208,21 @@ async function splitPayment(bookingId, paymentId, totalAmount, ownerId) {
     const existingSplit = existingBookingSnap.data()?.splitDetails
     if (existingSplit?.paymentId === paymentId) return existingSplit
 
-    // Fetch platform commission setting
-    const settingsSnap = await db.collection('settings').doc('platform').get()
+    const [settingsSnap, vendorSnap] = await Promise.all([
+      db.collection('settings').doc('platform').get(),
+      ownerId ? db.collection('users').doc(ownerId).get() : Promise.resolve({ exists: false }),
+    ])
     const settings = settingsSnap.exists ? settingsSnap.data() : {}
-    const commissionPercent = settings.platformCommissionPercent || 15
+    const vendor = vendorSnap.exists ? vendorSnap.data() : {}
+
+    const rawOverride = vendor.commissionPercent
+    const hasVendorOverride = rawOverride !== undefined && rawOverride !== null && rawOverride !== '' && Number.isFinite(Number(rawOverride))
+    const commissionPercent = hasVendorOverride
+      ? Math.min(100, Math.max(0, Number(rawOverride)))
+      : Math.min(100, Math.max(0, Number(settings.platformCommissionPercent ?? 15)))
 
     const platformCut = Math.round(totalAmount * commissionPercent / 100)
     const vendorCut = totalAmount - platformCut
-
-    // Get vendor's linked account
-    const vendorSnap = await db.collection('users').doc(ownerId).get()
-    const vendor = vendorSnap.exists ? vendorSnap.data() : {}
     const linkedAccountId = vendor.razorpayAccountId
 
     let transferId = null
@@ -1163,6 +1258,7 @@ async function splitPayment(bookingId, paymentId, totalAmount, ownerId) {
         platformCut,
         vendorCut,
         platformCommissionPercent: commissionPercent,
+        splitSource: hasVendorOverride ? 'vendor_override' : 'platform_default',
         transferId,
         transferStatus,
         paymentId,
@@ -1171,7 +1267,7 @@ async function splitPayment(bookingId, paymentId, totalAmount, ownerId) {
       updatedAt: FieldValue.serverTimestamp(),
     })
 
-    return { platformCut, vendorCut, transferId, transferStatus }
+    return { platformCut, vendorCut, commissionPercent, transferId, transferStatus }
   } catch (error) {
     console.error('Split payment error:', error)
     return { error: error.message }
@@ -1221,6 +1317,529 @@ app.delete('/api/vehicles/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Delete vehicle error:', error)
     return res.status(500).json({ error: 'Unable to delete vehicle' })
+  }
+})
+
+// ── Admin Portal Auth & Full CRUD Endpoints ────────────────────────────────
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 15,
+  key: (req) => `admin-login:${req.ip}`,
+})
+
+app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
+  try {
+    const adminId = String(req.body?.adminId || '').trim()
+    const password = String(req.body?.password || '')
+    if (!adminId || !password || adminId.includes('/')) {
+      return res.status(400).json({ error: 'Admin ID and password are required' })
+    }
+
+    const credRef = db.collection('adminCredentials').doc(adminId)
+    const credSnap = await credRef.get()
+    if (!credSnap.exists) {
+      return res.status(401).json({ error: 'Invalid Admin ID or password' })
+    }
+
+    const credData = credSnap.data() || {}
+    const { valid, needsUpgrade } = verifyAdminPassword(password, credData)
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid Admin ID or password' })
+    }
+
+    // Automatically upgrade any manually-entered plaintext password to a salted scrypt hash
+    if (needsUpgrade) {
+      const { salt, hash } = hashAdminPassword(password)
+      await credRef.update({
+        passwordHash: hash,
+        passwordSalt: salt,
+        password: FieldValue.delete(),
+        lastLoginAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    } else {
+      await credRef.update({ lastLoginAt: FieldValue.serverTimestamp() })
+    }
+
+    const adminUid = `admin_${adminId}`
+    const adminName = credData.name || adminId
+    await db.collection('users').doc(adminUid).set({
+      uid: adminUid,
+      adminId,
+      name: adminName,
+      email: credData.email || `${adminId}@admin.fleetmobilities.in`,
+      role: 'admin',
+      isVerified: true,
+      verifiedBadge: true,
+      kycStatus: 'approved',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true })
+
+    const customToken = await getAuth().createCustomToken(adminUid, {
+      admin: true,
+      role: 'admin',
+      adminId,
+    })
+
+    return res.json({ success: true, customToken, adminId, name: adminName })
+  } catch (error) {
+    console.error('Admin login error:', error)
+    return res.status(500).json({ error: 'Admin authentication failed' })
+  }
+})
+
+// Vendor-by-vendor rental split & partner config
+app.put('/api/admin/vendors/:uid/split', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { uid } = req.params
+    const { commissionPercent, razorpayAccountId, role } = req.body
+    const updates = { updatedAt: FieldValue.serverTimestamp() }
+
+    if (commissionPercent === null || commissionPercent === '') {
+      updates.commissionPercent = FieldValue.delete()
+    } else if (commissionPercent !== undefined) {
+      const parsed = Number(commissionPercent)
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+        return res.status(400).json({ error: 'Commission percentage must be between 0 and 100' })
+      }
+      updates.commissionPercent = parsed
+    }
+
+    if (razorpayAccountId !== undefined) {
+      updates.razorpayAccountId = String(razorpayAccountId || '').trim()
+    }
+
+    if (role && ['renter', 'vendor', 'owner', 'admin'].includes(role)) {
+      updates.role = role
+      if (role === 'vendor') {
+        updates.vendorRequested = false
+        updates.vendorApprovedAt = FieldValue.serverTimestamp()
+      }
+    }
+
+    await db.collection('users').doc(uid).set(updates, { merge: true })
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Update vendor split error:', error)
+    return res.status(500).json({ error: 'Unable to update vendor split configuration' })
+  }
+})
+
+// Admin User CRUD
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { name, email, password, phone = '', role = 'renter', kycStatus = 'not_submitted', commissionPercent } = req.body
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' })
+    const safeRole = ['renter', 'vendor', 'owner', 'admin'].includes(role) ? role : 'renter'
+
+    let uid
+    try {
+      const existing = await getAuth().getUserByEmail(String(email).trim())
+      uid = existing.uid
+    } catch {
+      const created = await getAuth().createUser({
+        email: String(email).trim(),
+        password: password ? String(password) : crypto.randomBytes(12).toString('hex'),
+        displayName: String(name).trim(),
+      })
+      uid = created.uid
+    }
+
+    const userPayload = {
+      uid,
+      name: String(name).trim(),
+      email: String(email).trim(),
+      phone: String(phone || '').trim(),
+      role: safeRole,
+      kycStatus,
+      isVerified: kycStatus === 'approved',
+      verifiedBadge: kycStatus === 'approved',
+      vendorRequested: false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+    if (commissionPercent !== undefined && commissionPercent !== null && commissionPercent !== '') {
+      userPayload.commissionPercent = Math.min(100, Math.max(0, Number(commissionPercent)))
+    }
+
+    await db.collection('users').doc(uid).set(userPayload, { merge: true })
+    return res.status(201).json({ success: true, id: uid })
+  } catch (error) {
+    console.error('Admin create user error:', error)
+    return res.status(400).json({ error: error.message || 'Unable to create user' })
+  }
+})
+
+app.put('/api/admin/users/:uid', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { uid } = req.params
+    const { name, email, phone, role, kycStatus, razorpayAccountId, commissionPercent, vendorRequested } = req.body
+    const updates = { updatedAt: FieldValue.serverTimestamp() }
+    if (name !== undefined) updates.name = String(name).trim()
+    if (email !== undefined) updates.email = String(email).trim()
+    if (phone !== undefined) updates.phone = String(phone).trim()
+    if (role && ['renter', 'vendor', 'owner', 'admin'].includes(role)) updates.role = role
+    if (kycStatus && ['not_submitted', 'pending', 'approved', 'rejected'].includes(kycStatus)) {
+      updates.kycStatus = kycStatus
+      updates.isVerified = kycStatus === 'approved'
+      updates.verifiedBadge = kycStatus === 'approved'
+    }
+    if (razorpayAccountId !== undefined) updates.razorpayAccountId = String(razorpayAccountId || '').trim()
+    if (vendorRequested !== undefined) updates.vendorRequested = Boolean(vendorRequested)
+    if (commissionPercent === null || commissionPercent === '') {
+      updates.commissionPercent = FieldValue.delete()
+    } else if (commissionPercent !== undefined) {
+      const parsed = Number(commissionPercent)
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+        return res.status(400).json({ error: 'Commission percentage must be between 0 and 100' })
+      }
+      updates.commissionPercent = parsed
+    }
+
+    await db.collection('users').doc(uid).set(updates, { merge: true })
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin update user error:', error)
+    return res.status(500).json({ error: 'Unable to update user' })
+  }
+})
+
+app.delete('/api/admin/users/:uid', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { uid } = req.params
+    if (uid === req.user.uid) {
+      return res.status(400).json({ error: 'You cannot delete your own active admin session' })
+    }
+    await db.collection('users').doc(uid).delete()
+    await getAuth().deleteUser(uid).catch(() => {})
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin delete user error:', error)
+    return res.status(500).json({ error: 'Unable to delete user' })
+  }
+})
+
+// Admin Vehicle CRUD
+app.post('/api/admin/vehicles', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const data = req.body || {}
+    if (!data.name || !data.dailyPrice) {
+      return res.status(400).json({ error: 'Vehicle name and dailyPrice are required' })
+    }
+    const imageUrl = String(data.imageUrl || '').trim()
+    const ref = await db.collection('vehicles').add({
+      name: String(data.name).trim(),
+      brand: String(data.brand || '').trim(),
+      model: String(data.model || '').trim(),
+      year: data.year ? Number(data.year) : new Date().getFullYear(),
+      type: String(data.type || 'Bike').trim(),
+      category: String(data.category || data.type || 'Bike').trim(),
+      fuelType: String(data.fuelType || 'Petrol').trim(),
+      seats: Number(data.seats || 2),
+      city: String(data.city || 'Dehradun').trim(),
+      regNo: String(data.regNo || '').trim().toUpperCase(),
+      cc: String(data.cc || '').trim(),
+      mileage: String(data.mileage || '').trim(),
+      useCase: String(data.useCase || 'mixed-use').trim(),
+      description: String(data.description || '').trim(),
+      dailyPrice: Number(data.dailyPrice),
+      weeklyPrice: Number(data.weeklyPrice || Number(data.dailyPrice) * 6),
+      pricePerHour: Number(data.pricePerHour || Math.round(Number(data.dailyPrice) / 8)),
+      pricePerMonth: Number(data.pricePerMonth || Number(data.dailyPrice) * 22),
+      securityDeposit: Number(data.securityDeposit ?? 5000),
+      imageUrl,
+      images: Array.isArray(data.images) && data.images.length > 0 ? data.images : (imageUrl ? [imageUrl] : []),
+      ownerId: String(data.ownerId || req.user.uid).trim(),
+      ownerName: String(data.ownerName || 'Fleet Partner').trim(),
+      hostName: String(data.ownerName || 'Fleet Partner').trim(),
+      status: ['active', 'pending', 'inactive'].includes(data.status) ? data.status : 'active',
+      available: data.available !== false,
+      rating: Number(data.rating || 5),
+      reviewCount: Number(data.reviewCount || 0),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    return res.status(201).json({ success: true, id: ref.id })
+  } catch (error) {
+    console.error('Admin create vehicle error:', error)
+    return res.status(500).json({ error: 'Unable to create vehicle' })
+  }
+})
+
+app.put('/api/admin/vehicles/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const data = req.body || {}
+    const updates = { updatedAt: FieldValue.serverTimestamp() }
+    const stringFields = ['name', 'brand', 'model', 'type', 'category', 'fuelType', 'city', 'regNo', 'cc', 'mileage', 'useCase', 'description', 'imageUrl', 'ownerId', 'ownerName', 'hostName']
+    for (const f of stringFields) {
+      if (data[f] !== undefined) updates[f] = String(data[f]).trim()
+    }
+    const numberFields = ['year', 'seats', 'dailyPrice', 'weeklyPrice', 'pricePerHour', 'pricePerMonth', 'securityDeposit']
+    for (const f of numberFields) {
+      if (data[f] !== undefined && data[f] !== '') updates[f] = Number(data[f])
+    }
+    if (data.status && ['active', 'pending', 'inactive'].includes(data.status)) updates.status = data.status
+    if (data.available !== undefined) updates.available = Boolean(data.available)
+    if (data.imageUrl !== undefined) updates.images = data.imageUrl ? [String(data.imageUrl).trim()] : []
+
+    await db.collection('vehicles').doc(req.params.id).update(updates)
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin update vehicle error:', error)
+    return res.status(500).json({ error: 'Unable to update vehicle' })
+  }
+})
+
+app.delete('/api/admin/vehicles/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('vehicles').doc(req.params.id).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin delete vehicle error:', error)
+    return res.status(500).json({ error: 'Unable to delete vehicle' })
+  }
+})
+
+// Admin Booking CRUD
+app.post('/api/admin/bookings', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const data = req.body || {}
+    if (!data.vehicleId || !data.renterId || !data.pickupDate || !data.dropoffDate) {
+      return res.status(400).json({ error: 'vehicleId, renterId, pickupDate, and dropoffDate are required' })
+    }
+    const [vehicleSnap, renterSnap] = await Promise.all([
+      db.collection('vehicles').doc(String(data.vehicleId)).get(),
+      db.collection('users').doc(String(data.renterId)).get(),
+    ])
+    const vehicle = vehicleSnap.exists ? vehicleSnap.data() : {}
+    const renter = renterSnap.exists ? renterSnap.data() : {}
+    const total = Number(data.totalAmount ?? vehicle.dailyPrice ?? 1000)
+    const bookingPublicId = `FLT-${Date.now().toString(36).toUpperCase()}`
+
+    const ref = await db.collection('bookings').add({
+      bookingId: bookingPublicId,
+      vehicleId: String(data.vehicleId),
+      vehicleName: data.vehicleName || vehicle.name || 'Vehicle',
+      vehicleImage: vehicle.imageUrl || '',
+      ownerId: data.ownerId || vehicle.ownerId || req.user.uid,
+      renterId: String(data.renterId),
+      renterName: data.renterName || renter.name || 'Customer',
+      renterEmail: data.renterEmail || renter.email || '',
+      pickupDate: data.pickupDate,
+      dropoffDate: data.dropoffDate,
+      pickupTime: data.pickupTime || '10:00',
+      dropoffTime: data.dropoffTime || '10:00',
+      rentalType: data.rentalType || 'daily',
+      status: ['pending', 'approved', 'active', 'completed', 'cancelled'].includes(data.status) ? data.status : 'pending',
+      paymentStatus: ['pending', 'token_paid', 'paid', 'pay_on_pickup', 'refund_pending', 'refunded'].includes(data.paymentStatus) ? data.paymentStatus : 'pending',
+      amountPaid: Number(data.amountPaid || 0),
+      remainingAmount: Math.max(0, total - Number(data.amountPaid || 0)),
+      pricing: { total, securityDeposit: Number(vehicle.securityDeposit || 5000) },
+      startOTP: data.status === 'approved' ? generateOTP() : null,
+      dropoffPIN: data.status === 'approved' ? generateOTP() : null,
+      createdBy: req.user.uid,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    return res.status(201).json({ success: true, id: ref.id, bookingId: bookingPublicId })
+  } catch (error) {
+    console.error('Admin create booking error:', error)
+    return res.status(500).json({ error: 'Unable to create booking' })
+  }
+})
+
+app.put('/api/admin/bookings/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { status, paymentStatus, amountPaid, totalAmount, pickupDate, dropoffDate, transferStatus } = req.body || {}
+    const bookingRef = db.collection('bookings').doc(req.params.id)
+    const snap = await bookingRef.get()
+    if (!snap.exists) return res.status(404).json({ error: 'Booking not found' })
+    const existing = snap.data()
+
+    const updates = { updatedAt: FieldValue.serverTimestamp() }
+    if (status && ['pending', 'approved', 'active', 'completed', 'cancelled'].includes(status)) {
+      updates.status = status
+      if (status === 'approved' && !existing.startOTP) {
+        updates.startOTP = generateOTP()
+        updates.dropoffPIN = generateOTP()
+      }
+    }
+    if (paymentStatus && ['pending', 'token_paid', 'paid', 'pay_on_pickup', 'refund_pending', 'refunded'].includes(paymentStatus)) {
+      updates.paymentStatus = paymentStatus
+    }
+    if (pickupDate) updates.pickupDate = String(pickupDate)
+    if (dropoffDate) updates.dropoffDate = String(dropoffDate)
+    if (totalAmount !== undefined && totalAmount !== '') {
+      updates['pricing.total'] = Number(totalAmount)
+    }
+    if (amountPaid !== undefined && amountPaid !== '') {
+      const paid = Number(amountPaid)
+      const total = totalAmount !== undefined && totalAmount !== '' ? Number(totalAmount) : Number(existing.pricing?.total || 0)
+      updates.amountPaid = paid
+      updates.remainingAmount = Math.max(0, total - paid)
+    }
+    if (transferStatus && existing.splitDetails) {
+      updates['splitDetails.transferStatus'] = transferStatus
+      if (transferStatus === 'processed') {
+        updates['splitDetails.settledAt'] = FieldValue.serverTimestamp()
+      }
+    }
+
+    await bookingRef.update(updates)
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin update booking error:', error)
+    return res.status(500).json({ error: 'Unable to update booking' })
+  }
+})
+
+app.delete('/api/admin/bookings/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('bookings').doc(req.params.id).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Admin delete booking error:', error)
+    return res.status(500).json({ error: 'Unable to delete booking' })
+  }
+})
+
+// Admin KYC, Coupons, Reports delete/update
+app.delete('/api/admin/kyc/:uid', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('verificationRequests').doc(req.params.uid).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to delete KYC request' })
+  }
+})
+
+app.delete('/api/admin/coupons/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('coupons').doc(req.params.id).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to delete coupon' })
+  }
+})
+
+app.put('/api/admin/reports/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { status, adminNote } = req.body || {}
+    await db.collection('reports').doc(req.params.id).update({
+      status: status || 'reviewed',
+      adminNote: String(adminNote || '').trim(),
+      reviewedBy: req.user.uid,
+      reviewedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to update report' })
+  }
+})
+
+app.delete('/api/admin/reports/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('reports').doc(req.params.id).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to delete report' })
+  }
+})
+
+// Admin Site Content (CMS)
+app.put('/api/admin/site-content', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { announcementEnabled, announcementText, heroTitle, heroSubtitle, footerTagline, cities } = req.body || {}
+    await db.collection('siteContent').doc('homepage').set({
+      announcementEnabled: Boolean(announcementEnabled),
+      announcementText: String(announcementText || '').trim(),
+      heroTitle: String(heroTitle || '').trim(),
+      heroSubtitle: String(heroSubtitle || '').trim(),
+      footerTagline: String(footerTagline || '').trim(),
+      cities: Array.isArray(cities)
+        ? cities.map((c) => String(c).trim()).filter(Boolean)
+        : ['Dehradun', 'Mussoorie', 'Rishikesh'],
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true })
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to update site content' })
+  }
+})
+
+// Admin Credentials Management (authenticated admins only; never exposes password hashes)
+app.get('/api/admin/credentials', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('adminCredentials').get()
+    const items = snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        name: data.name || d.id,
+        email: data.email || '',
+        active: data.active !== false,
+        hasHashedPassword: Boolean(data.passwordHash),
+        lastLoginAt: data.lastLoginAt || null,
+      }
+    })
+    return res.json({ credentials: items })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to list admin accounts' })
+  }
+})
+
+app.post('/api/admin/credentials', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const adminId = String(req.body?.adminId || '').trim()
+    const password = String(req.body?.password || '')
+    const name = String(req.body?.name || adminId).trim()
+    const email = String(req.body?.email || '').trim()
+    const active = req.body?.active !== false
+
+    if (!adminId || adminId.includes('/')) {
+      return res.status(400).json({ error: 'Valid Admin ID is required' })
+    }
+
+    const payload = {
+      name,
+      email,
+      active,
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
+    if (password) {
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' })
+      }
+      const { salt, hash } = hashAdminPassword(password)
+      payload.passwordHash = hash
+      payload.passwordSalt = salt
+      payload.password = FieldValue.delete()
+    } else {
+      const existing = await db.collection('adminCredentials').doc(adminId).get()
+      if (!existing.exists) {
+        return res.status(400).json({ error: 'Password is required for a new Admin ID' })
+      }
+    }
+
+    await db.collection('adminCredentials').doc(adminId).set(payload, { merge: true })
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to save admin credential' })
+  }
+})
+
+app.delete('/api/admin/credentials/:adminId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { adminId } = req.params
+    if (`admin_${adminId}` === req.user.uid) {
+      return res.status(400).json({ error: 'You cannot delete the currently signed-in admin ID' })
+    }
+    await db.collection('adminCredentials').doc(adminId).delete()
+    return res.json({ success: true })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to delete admin credential' })
   }
 })
 

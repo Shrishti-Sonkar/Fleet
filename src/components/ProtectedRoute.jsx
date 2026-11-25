@@ -44,15 +44,6 @@ export function VerifiedRoute({ children }) {
   return children
 }
 
-// Admin only
-export function AdminRoute({ children }) {
-  const { user, userDoc, loading } = useAuth()
-
-  if (loading) return <LoadingSpinner />
-  if (!user || userDoc?.role !== 'admin') return <Navigate to="/" replace />
-  return children
-}
-
 // Owner/Vendor only
 export function OwnerRoute({ children }) {
   const { user, userDoc, loading } = useAuth()

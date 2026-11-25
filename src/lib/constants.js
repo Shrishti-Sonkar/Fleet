@@ -19,7 +19,6 @@ export const ROUTES = {
   WISHLIST: '/wishlist',
   DASHBOARD: '/dashboard',
   ADD_VEHICLE: '/add-vehicle',
-  ADMIN: '/admin',
 
   // Vendor routes
   VENDOR_HOME: '/vendor',
@@ -29,9 +28,6 @@ export const ROUTES = {
   VENDOR_MAP: '/vendor/map',
   VENDOR_EARNINGS: '/vendor/earnings',
   VENDOR_PAYOUTS: '/vendor/payouts',
-  ADMIN_REPORTS: '/admin/reports',
-  ADMIN_COUPONS: '/admin/coupons',
-  ADMIN_SETTINGS: '/admin/settings',
 
   VEHICLE_DETAIL: (id = ':id') => `/vehicle/${id}`,
   BOOKING: (id = ':id') => `/booking/${id}`,
