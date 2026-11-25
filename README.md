@@ -1,13 +1,13 @@
 # Fleet — Peer-to-Peer Vehicle Rental Marketplace (India)
 
-**Fleet** is a modern, full-stack peer-to-peer vehicle rental marketplace built for the Indian market. Rent bikes, scooters, and cars from local hosts across Dehradun, Mussoorie, and Rishikesh — powered by **React + Vite**, **Node.js/Express**, **Firebase**, and **Razorpay Payments**.
+**Fleet** is a modern, full-stack peer-to-peer vehicle rental marketplace built for the Indian market. Rent bikes, scooters, and cars from local hosts across Dehradun, Mussoorie, and Rishikesh — powered by **React + Rsbuild**, **Node.js/Express**, **Firebase**, and **Razorpay Payments**.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🔐 Authentication & Role Separation
-- **Dual Role System** — Separate flows for **Renters** and **Vendors (Hosts)**
+- **Dual Portal & Role System** — Customer Marketplace (`fleetmobilities.in`) & Standalone Vendor Partner Portal (`fleetmobilities.info` / `vendor.*`)
 - **Multiple Login Methods** — Google SSO, Email/Password, and OTP-based mobile login
 - **KYC Verification** — Upload driving license and Aadhaar for identity validation via Admin dashboard
 - **Captain Mode** — Hosts can toggle captain mode to offer rides as a driver
@@ -32,8 +32,8 @@
 - **Post-Ride Reviews** — Submit ratings and feedback after ride completion
 
 ### 📊 Dashboards & Earnings
+- **Vendor Partner Portal** — Dedicated dark-theme portal on `fleetmobilities.info` for listings, handovers, earnings, and Razorpay Route payouts
 - **Owner Dashboard** — Manage listings, approve/reject bookings, generate drop-off PINs
-- **Vendor Home** — Quick overview of active bookings and vehicle status
 - **Vendor Earnings** — Detailed earnings breakdown per vehicle and period
 - **Vendor Payouts** — Track payout history and initiate withdrawal requests
 - **Admin Dashboard** — KYC verification manager, user listing approvals, and role control
@@ -58,137 +58,25 @@
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19, React Router v7, Vite |
+| Frontend | React 19, React Router v7, Rsbuild (Rspack) |
 | Styling | Tailwind CSS v3, custom globals |
-| Backend | Node.js, Express |
+| Backend | Node.js, Express (`server.js`) |
 | Database | Cloud Firestore (real-time) |
 | Auth | Firebase Authentication |
-| Storage | Cloudinary signed uploads (Firebase Storage rules retained for migration) |
-| Payments | Razorpay Standard Checkout |
+| Storage | Cloudinary signed uploads |
+| Payments | Razorpay Standard Checkout & Route Split Payouts |
 | PDF Generation | jsPDF |
-| Deployment | AWS ECS/S3/CloudFront or Cloudflare Pages + AWS API |
+| Deployment | Azure App Service (Linux, Node 22 LTS) |
 
 ---
 
-## 📦 Project Structure
+## 🌐 Dual-Domain Routing
 
-```
-fleet-rental/
-├── server.js              # Express backend (API, Razorpay, Firebase Admin)
-├── index.html             # Vite HTML entry point
-├── vite.config.js         # Vite config (proxy, chunk splitting)
-├── tailwind.config.js     # Tailwind theme config
-├── postcss.config.js      # PostCSS config
-├── eslint.config.js       # ESLint config
-├── Dockerfile             # Production API image
-├── Dockerfile.frontend    # Production frontend image
-├── deploy/                # ECS task definition and deployment assets
-├── vercel.json            # Optional preview SPA rewrites & headers
-├── firestore.rules        # Firestore security rules
-├── storage.rules          # Firebase Storage security rules
-├── cors.json              # CORS config for Firebase Storage bucket
-├── set-cors.js            # Script to apply CORS config to Storage bucket
-├── seed-vehicles.html     # One-off browser tool to seed Firestore vehicles
-├── .env                   # Local environment variables (not committed)
-├── .env.example           # Template for required environment variables
-├── public/
-│   ├── favicon.svg
-│   ├── icons.svg
-│   └── _redirects         # Netlify-style SPA redirect fallback
-└── src/
-    ├── main.jsx           # React entry point
-    ├── App.jsx            # Root router and layout
-    ├── styles/
-    │   └── globals.css
-    ├── context/
-    │   ├── AuthContext.jsx
-    │   ├── PriceContext.jsx
-    │   └── ThemeContext.jsx
-    ├── hooks/
-    │   ├── useActiveBooking.js
-    │   ├── useBooking.js
-    │   ├── useNotifications.js
-    │   ├── useTokens.js
-    │   ├── useVehicleReviews.js
-    │   ├── useVehicles.js
-    │   └── useWishlist.js
-    ├── lib/
-    │   ├── firebase.js
-    │   ├── api.js
-    │   ├── constants.js
-    │   ├── invoiceGenerator.js
-    │   └── notificationHelper.js
-    ├── data/
-    │   └── mockVehicles.js
-    ├── components/
-    │   ├── CancelRideModal.jsx
-    │   ├── DropoffPinModal.jsx
-    │   ├── PostRideRating.jsx
-    │   ├── ProtectedRoute.jsx
-    │   ├── RenterNav.jsx
-    │   ├── ReviewCard.jsx
-    │   ├── RideOTPCard.jsx
-    │   ├── StartRideModal.jsx
-    │   ├── VendorNav.jsx
-    │   ├── layout/
-    │   │   ├── BottomTabBar.jsx
-    │   │   ├── Footer.jsx
-    │   │   ├── PageLayout.jsx
-    │   │   ├── SideDrawer.jsx
-    │   │   └── TopNavBar.jsx
-    │   ├── sections/
-    │   │   ├── ActiveBookingCard.jsx
-    │   │   ├── BookingSteps.jsx
-    │   │   ├── FilterBar.jsx
-    │   │   ├── HeroSection.jsx
-    │   │   ├── HowItWorks.jsx
-    │   │   ├── PopularVehicles.jsx
-    │   │   ├── PriceModeToggle.jsx
-    │   │   ├── PromoBanner.jsx
-    │   │   ├── SearchWidget.jsx
-    │   │   └── VehicleCard.jsx
-    │   └── ui/
-    │       ├── Badge.jsx
-    │       ├── Button.jsx
-    │       ├── Card.jsx
-    │       ├── Chip.jsx
-    │       ├── Divider.jsx
-    │       ├── Icon.jsx
-    │       ├── Input.jsx
-    │       ├── NotificationBell.jsx
-    │       └── TokenBadge.jsx
-    └── pages/
-        ├── SplashPage.jsx
-        ├── LoginPage.jsx
-        ├── ForgotPasswordPage.jsx
-        ├── RoleSelectionPage.jsx
-        ├── HomePage.jsx
-        ├── BrowsePage.jsx
-        ├── VehicleDetailPage.jsx
-        ├── BookingPage.jsx
-        ├── BookingDetailPage.jsx
-        ├── PaymentStatusPage.jsx
-        ├── MyBookingsPage.jsx
-        ├── ActiveRidePage.jsx
-        ├── WishlistPage.jsx
-        ├── WalletPage.jsx
-        ├── NotificationsPage.jsx
-        ├── ProfilePage.jsx
-        ├── EditProfilePage.jsx
-        ├── VerificationPage.jsx
-        ├── HostPage.jsx
-        ├── AddVehiclePage.jsx
-        ├── VendorHomePage.jsx
-        ├── OwnerDashboard.jsx
-        ├── VendorEarningsPage.jsx
-        ├── VendorPayoutsPage.jsx
-        ├── AdminDashboard.jsx
-        ├── AdminOpsPage.jsx
-        ├── AboutPage.jsx
-        ├── SupportPage.jsx
-        ├── LegalPage.jsx
-        └── NotFoundPage.jsx
-```
+Both portals run from the unified `main` branch and a single Azure App Service deployment (`src/lib/portal.js`):
+- **`fleetmobilities.in`** → Customer Rental Marketplace
+- **`fleetmobilities.info`** (or any `vendor.*` subdomain) → Standalone Vendor Partner Portal (`src/vendor/`)
+
+In local development, append `?portal=vendor` (or `?portal=customer`) to `http://localhost:5173` to preview either portal.
 
 ---
 
@@ -210,47 +98,21 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
-```env
-# Firebase (Frontend — VITE_ prefix required)
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-
-# Backend
-PORT=5000
-RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
-FIREBASE_PROJECT_ID=your_project_id
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-
-# Firebase Admin credentials — one of:
-GOOGLE_APPLICATION_CREDENTIALS=./service-account.json
-# OR
-FIREBASE_SERVICE_ACCOUNT_BASE64=<base64 encoded service account JSON>
-
-# CORS allowed origins (comma-separated)
-CORS_ORIGINS=http://localhost:5173
-```
-
 ### 3. Start Development
 
 ```bash
 npm run dev
 ```
 
-This runs **both** the Vite frontend and the Express backend concurrently:
-- Frontend → [http://localhost:5173](http://localhost:5173)
+This runs **both** the Rsbuild frontend and the Express backend concurrently:
+- Frontend → [http://localhost:5173](http://localhost:5173) (`?portal=vendor` for Vendor Portal)
 - Backend API → [http://localhost:5000](http://localhost:5000)
 
-### 4. Production Build
+### 4. Production Build & Start
 
 ```bash
 npm run build
+npm start
 ```
 
 ---
@@ -258,37 +120,20 @@ npm run build
 ## 🔥 Firebase Setup
 
 1. Create a project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable **Authentication** (Email/Password + Google)
+2. Enable **Authentication** (Email/Password + Google + Phone) and add `fleetmobilities.in` and `fleetmobilities.info` under **Authorized domains**
 3. Enable **Firestore** and deploy security rules:
    ```bash
    firebase deploy --only firestore:rules
    ```
-4. Enable **Storage** and deploy rules:
-   ```bash
-   firebase deploy --only storage
-   ```
-5. Apply the CORS config to your Storage bucket:
-   ```bash
-   node set-cors.js
-   ```
-6. Download a **Service Account JSON** from Project Settings → Service Accounts and set `GOOGLE_APPLICATION_CREDENTIALS` in your `.env`.
+4. Download a **Service Account JSON** from Project Settings → Service Accounts and set `GOOGLE_APPLICATION_CREDENTIALS` locally (or `FIREBASE_SERVICE_ACCOUNT_BASE64` in Azure App Service).
 
 ---
 
-## ⚡ Build Optimisations
+## ☁️ Production Deployment (Azure App Service)
 
-Vite's Rollup chunk-splitting is configured in `vite.config.js`:
-- **`firebase`** — isolated in a separate async chunk
-- **`jspdf`** — isolated to prevent heavy PDF library from blocking initial load
-- **`vendor`** — shared node modules bundled together
+The production app deploys directly from `main` to **Azure App Service (Linux Node.js)** via `.github/workflows/deploy-azure.yml` — no Docker required.
 
----
-
-## 🌐 Production deployment
-
-The production path is containerized: run the API from `Dockerfile` on AWS ECS Fargate, and serve the frontend from `Dockerfile.frontend`, S3/CloudFront, or Cloudflare Pages. Firebase remains the database and authentication layer.
-
-See [`docs/production-runbook.md`](docs/production-runbook.md) for secrets, AWS OIDC deployment, Cloudflare routing, CI checks, and pre-launch gates. Vercel can still be used for previews, but it is no longer the required production host.
+See [`docs/production-runbook.md`](docs/production-runbook.md) for Azure environment variables, custom domain DNS bindings (`fleetmobilities.in` & `fleetmobilities.info`), free managed SSL setup, and release checks.
 
 ---
 

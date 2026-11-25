@@ -1,10 +1,8 @@
 /**
  * API base URL.
- * - In **development**, Vite_API_BASE_URL is not set → defaults to `''` (empty string),
- *   so paths like `/api/health` are relative, and Vite's dev proxy handles forwarding
- *   to the backend at `http://localhost:5000`.
- * - In **production**, set VITE_API_BASE_URL to the deployed backend origin
- *   (e.g. `https://fleet-backend.onrender.com`).
+ * - Defaults to `''` (empty string) for same-origin requests:
+ *   - In development, Rsbuild's dev proxy forwards `/api/*` to `http://localhost:5000`.
+ *   - In production on Azure App Service, Express serves both the SPA and `/api/*` on the same domain.
  */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 

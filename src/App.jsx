@@ -1,12 +1,15 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
+import { isVendorPortal } from '@/lib/portal'
 import { useAuth } from './context/AuthContext'
 import {
   ProtectedRoute, VerifiedRoute, AdminRoute, RoleRoute,
 } from './components/ProtectedRoute'
 import RenterNav from './components/RenterNav'
 import VendorNav from './components/VendorNav'
+
+const VendorPortalApp = lazy(() => import('./vendor/VendorPortalApp'))
 
 // Eager import: no splash
 import LoginPage from './pages/LoginPage'
@@ -65,6 +68,14 @@ function RoleNav() {
 }
 
 export default function App() {
+  if (isVendorPortal()) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <VendorPortalApp />
+      </Suspense>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>

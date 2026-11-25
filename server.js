@@ -24,10 +24,20 @@ import crypto from 'crypto'
 
 dotenv.config()
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
+let razorpayClient = null
+function getRazorpay() {
+  if (razorpayClient) return razorpayClient
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    const err = new Error('Razorpay payment keys are not configured')
+    err.status = 503
+    throw err
+  }
+  razorpayClient = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  })
+  return razorpayClient
+}
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -71,13 +81,19 @@ app.use((req, res, next) => {
  * CORS configuration
  *
  * CORS_ORIGINS  — comma-separated exact origins allowed in production.
- *   e.g. CORS_ORIGINS=https://fleetmobilities.vercel.app,https://fleet-rental.vercel.app
+ *   e.g. CORS_ORIGINS=https://fleetmobilities.in,https://www.fleetmobilities.in,https://fleetmobilities.info,https://www.fleetmobilities.info
  *
- * CORS_PATTERN  — optional JS regex string to allow dynamic origins such as
- *   Vercel preview URLs.  No delimiters, no flags.
- *   e.g. CORS_PATTERN=https://fleet-rental-[a-z0-9-]+\.vercel\.app
+ * CORS_PATTERN  — optional JS regex string to allow dynamic origins (no delimiters, no flags).
  */
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+const defaultOrigins = [
+  'http://localhost:5173',
+  'https://fleetmobilities.in',
+  'https://www.fleetmobilities.in',
+  'https://fleetmobilities.info',
+  'https://www.fleetmobilities.info',
+].join(',')
+
+const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins)
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean)
@@ -93,7 +109,6 @@ app.use(cors({
     // Allow server-to-server, curl, Postman, etc.
     if (!origin) return callback(null, true)
     if (allowedOrigins.includes(origin)) return callback(null, true)
-    // Allow dynamic preview URLs matched by CORS_PATTERN
     if (corsPattern && corsPattern.test(origin)) return callback(null, true)
     // In development, allow any localhost / 127.0.0.1 origin automatically
     if (isDevMode && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
@@ -112,9 +127,9 @@ app.use(cors({
 app.use(express.json({ limit: '1mb', strict: true }))
 app.use('/api', rateLimit({ max: 180 }))
 
-// ── Static file serving (Render / Railway / any Node host) ──────────────────
-// Serve the built Vite React app from dist/ so that a single Render Web Service
-// can handle both the API and the SPA without a separate static site.
+// ── Static file serving (Azure App Service / Node host) ─────────────────────
+// Serve the built React app from dist/ so a single Node service handles both
+// the API and the customer/vendor SPAs on fleetmobilities.in & .info.
 const distPath = path.resolve(process.cwd(), 'dist')
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath, {
@@ -885,7 +900,7 @@ app.post('/api/payments/create-order', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No amount due or already fully paid' })
     }
 
-    const order = await razorpay.orders.create({
+    const order = await getRazorpay().orders.create({
       amount: Math.round(orderAmount * 100),
       currency: 'INR',
       receipt: `${booking.bookingId || booking.id}_${paymentType}`.slice(0, 40),
@@ -977,7 +992,7 @@ app.post('/api/payments/verify', requireAuth, async (req, res) => {
     }
 
     // Fetch payment details from Razorpay
-    const payment = await razorpay.payments.fetch(razorpay_payment_id)
+    const payment = await getRazorpay().payments.fetch(razorpay_payment_id)
     if (payment.status !== 'captured' || payment.order_id !== razorpay_order_id) {
       return res.status(400).json({ error: 'Payment is not captured for this order' })
     }
@@ -1120,7 +1135,7 @@ async function splitPayment(bookingId, paymentId, totalAmount, ownerId) {
 
     if (linkedAccountId) {
       try {
-        const transfer = await razorpay.payments.transfer(paymentId, {
+        const transfer = await getRazorpay().payments.transfer(paymentId, {
           transfers: [{
             account: linkedAccountId,
             amount: vendorCut * 100,  // paise
@@ -1180,6 +1195,35 @@ app.get('/api/payments/booking/:id/status', requireAuth, async (req, res) => {
   }
 })
 
+app.delete('/api/vehicles/:id', requireAuth, async (req, res) => {
+  try {
+    const vehicleRef = db.collection('vehicles').doc(req.params.id)
+    const snap = await vehicleRef.get()
+    if (!snap.exists) return res.status(404).json({ error: 'Vehicle not found' })
+
+    const vehicle = snap.data()
+    const isAdmin = await isAdminUser(req.user.uid)
+    if (vehicle.ownerId !== req.user.uid && !isAdmin) {
+      return res.status(403).json({ error: 'You do not have permission to delete this vehicle' })
+    }
+
+    const activeBookings = await db.collection('bookings')
+      .where('vehicleId', '==', req.params.id)
+      .where('status', 'in', ['pending', 'approved', 'active'])
+      .limit(1)
+      .get()
+    if (!activeBookings.empty) {
+      return res.status(409).json({ error: 'Cannot delete a vehicle with active or pending bookings' })
+    }
+
+    await vehicleRef.delete()
+    return res.json({ success: true })
+  } catch (error) {
+    console.error('Delete vehicle error:', error)
+    return res.status(500).json({ error: 'Unable to delete vehicle' })
+  }
+})
+
 // ── SPA fallback ────────────────────────────────────────────────────────────
 // Any request that didn't match an /api route or a static file in dist/ should
 // receive the React app's index.html so that client-side routing can take over.
@@ -1207,13 +1251,8 @@ app.use((err, req, res, next) => {
   return res.status(500).json({ error: 'Internal server error' })
 })
 
-// Only start a long-running server when run directly (local dev / a Node host
-// like Render/Railway). On Vercel the app is imported as a serverless handler
-// (see api/index.js) and must NOT call listen().
-if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Fleet Backend Server running on port ${PORT}`)
-  })
-}
+app.listen(PORT, () => {
+  console.log(`Fleet Server running on port ${PORT}`)
+})
 
 export default app

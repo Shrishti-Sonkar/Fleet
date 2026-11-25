@@ -1,6 +1,5 @@
 export const ROUTES = {
   HOME: '/',
-  SPLASH: '/splash',
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
   BROWSE: '/browse',

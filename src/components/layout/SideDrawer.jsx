@@ -35,7 +35,7 @@ export default function SideDrawer({ open, onClose }) {
   const [switching, setSwitching] = useState(false)
 
   // Close on route change
-  useEffect(() => { onClose() }, [location.pathname]) // eslint-disable-line
+  useEffect(() => { onClose() }, [location.pathname])
 
   // Close on outside click
   useEffect(() => {

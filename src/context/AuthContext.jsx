@@ -21,7 +21,7 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [userDoc, setUserDoc] = useState(null)
+  const [userDoc, setUserDoc] = useState(undefined)
   const [loading, setLoading] = useState(true)
 
   // Helper to fetch the user doc
@@ -50,6 +50,7 @@ export function AuthProvider({ children }) {
       }
 
       setUser(firebaseUser)
+      setUserDoc(undefined)
       clearTimeout(timeout)
       setLoading(false)
 
@@ -58,7 +59,7 @@ export function AuthProvider({ children }) {
 
       // Fetch the user doc in the background; failures don't block the app.
       fetchAndMigrateUserDoc(firebaseUser.uid)
-        .then((uDoc) => setUserDoc(uDoc))
+        .then((uDoc) => setUserDoc(uDoc ?? null))
         .catch((err) => {
           console.error('Error fetching user doc:', err)
           setUserDoc(null)

@@ -1,5 +1,4 @@
 import TopNavBar from './TopNavBar'
-import BottomTabBar from './BottomTabBar'
 
 export default function PageLayout({ children, showBottomBar = true, className = '' }) {
   return (
@@ -8,7 +7,6 @@ export default function PageLayout({ children, showBottomBar = true, className =
       <main className={`mt-[68px] ${showBottomBar ? 'pb-16 md:pb-0' : ''} ${className}`}>
         {children}
       </main>
-      {showBottomBar && <BottomTabBar />}
     </div>
   )
 }

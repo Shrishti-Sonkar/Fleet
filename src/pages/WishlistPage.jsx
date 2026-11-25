@@ -70,7 +70,7 @@ export default function WishlistPage() {
     } else {
       setLoading(false)
     }
-  }, [wishlistIds, wishlistLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wishlistIds, wishlistLoading])
 
   return (
     <PageLayout>

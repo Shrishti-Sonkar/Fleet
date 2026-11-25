@@ -1,15 +1,14 @@
 # Fleet production runbook
 
-This repository is split into two deployable pieces:
+Fleet runs as a unified Node.js service (`server.js`) that serves both the Express/Firebase Admin API (`/api/*`) and the Rsbuild-compiled React frontend (`dist/`).
 
-- `Dockerfile`: the Express/Firebase Admin API.
-- `Dockerfile.frontend`: the Vite build served by Nginx.
+A single Azure App Service (Linux, Node 22 LTS) hosts both portals using domain-based routing (`src/lib/portal.js`):
+- `fleetmobilities.in` (and `www.fleetmobilities.in`) $\rightarrow$ Customer Marketplace
+- `fleetmobilities.info` (or any `vendor.*` subdomain) $\rightarrow$ Standalone Vendor Partner Portal
 
-Firebase remains the data/auth layer. AWS or Cloudflare hosts the application layers.
+## 1. Secrets and Azure App Service Configuration
 
-## 1. Secrets and GitHub
-
-Never commit `.env`, Firebase Admin JSON, private keys, or payment secrets. The browser-safe `VITE_FIREBASE_*` values are configuration, not authorization; Firestore and Storage rules are the security boundary.
+Never commit `.env`, Firebase Admin JSON, private keys, or payment secrets. The browser-safe `VITE_FIREBASE_*` values are client configuration, not authorization; Firestore rules and backend token verification are the security boundary.
 
 For local development:
 
@@ -17,49 +16,39 @@ For local development:
 2. Add the Firebase web configuration and backend credentials.
 3. Keep `.env` ignored by Git.
 
-For production, store these in AWS Secrets Manager (or an equivalent Cloudflare secret store):
+In **Azure Portal → App Service → Settings → Environment variables**, set:
 
-- `FIREBASE_SERVICE_ACCOUNT_BASE64`
+- `NODE_ENV=production`
+- `SCM_DO_BUILD_DURING_DEPLOYMENT=false` (if deploying prebuilt artifacts via `.github/workflows/deploy-azure.yml`)
+- `FIREBASE_SERVICE_ACCOUNT_BASE64` (base64 of the Firebase service account JSON)
+- `FIREBASE_PROJECT_ID=fleetmobilities-3ee31`
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
-- `CORS_ORIGINS`
+- `CORS_ORIGINS=https://fleetmobilities.in,https://www.fleetmobilities.in,https://fleetmobilities.info,https://www.fleetmobilities.info`
 
-The frontend build needs these non-secret Vite variables as GitHub Actions environment variables or deployment-platform build variables:
+In **GitHub → Repository Settings → Secrets and variables → Actions**:
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
-- `VITE_FIREBASE_VAPID_KEY`
-- `VITE_API_BASE_URL`
+- **Variables**: `AZURE_WEBAPP_NAME`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_VAPID_KEY`
+- **Secret**: `AZURE_WEBAPP_PUBLISH_PROFILE` (downloaded from Azure App Service Overview → Download publish profile)
 
-If a secret has ever been committed, rotate it at the provider first. Removing it from Git history does not invalidate the old credential.
+## 2. Azure App Service Setup & Custom Domains
 
-## 2. Recommended AWS layout
+1. Create an **Azure App Service**:
+   - **Publish**: Code
+   - **Runtime stack**: Node 22 LTS
+   - **Operating System**: Linux
+   - **Pricing tier**: Basic (B1) or higher (required for custom domains + free managed SSL)
+   - **Startup Command**: `npm start`
+   - **Health check path**: `/api/health`
+2. Add Custom Domains in **Azure Portal → Custom domains**:
+   - Bind `fleetmobilities.in`, `www.fleetmobilities.in`, `fleetmobilities.info`, `www.fleetmobilities.info` (or `vendor.fleetmobilities.in`) using the `A`/`CNAME` and `asuid` `TXT` records shown by Azure at your DNS registrar.
+   - Bind a free **App Service Managed Certificate (SSL/TLS)** for each hostname.
+3. Add both domains to **Firebase Console → Authentication → Settings → Authorized domains** (`fleetmobilities.in`, `www.fleetmobilities.in`, `fleetmobilities.info`, `www.fleetmobilities.info`) so Google/Phone Auth works on both domains.
 
-1. Create an ECR repository for the API image.
-2. Create an ECS Fargate cluster, private task subnet, security group, and an Application Load Balancer.
-3. Register `deploy/ecs-task-definition.json` after replacing its placeholders.
-4. Put the API behind HTTPS at a stable hostname such as `api.example.com`.
-5. Point `CORS_ORIGINS` at the exact frontend origins, with no wildcard.
-6. Create the GitHub Actions OIDC role and set the production environment variable `AWS_DEPLOY_ROLE_ARN` plus `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, and `ECS_SERVICE` repository variables.
-7. Run the manual `Deploy API to ECS` workflow. It publishes an immutable image tagged with the commit SHA and waits for ECS stability.
-8. Host the frontend in S3 + CloudFront, Cloudflare Pages, or the Nginx container on ECS. Set `VITE_API_BASE_URL` to the API hostname at build time.
-
-The API task health check is `GET /api/health`. Configure the ALB health check to use the same endpoint and expose only HTTPS publicly.
-
-## 3. Cloudflare alternative
-
-Cloudflare Pages can build the Vite frontend from this repository. Cloudflare DNS/WAF can proxy the API hostname to the AWS ALB. Keep the API itself on ECS (or another private-capable container host) so Firebase Admin credentials never enter a browser build.
-
-Use exact production origins in `CORS_ORIGINS`; do not use a wildcard when credentials are enabled.
-
-## 4. Required release checks
+## 3. Required Release Checks
 
 Run locally or in CI:
 
@@ -70,16 +59,6 @@ npm.cmd run build
 npm.cmd test
 npm.cmd run test:rules
 node --check server.js
-docker build --file Dockerfile --tag fleet-api:local .
 ```
 
-The Firestore rules test requires Java because the Firebase emulator runs on the JVM. CI's Ubuntu runner provides that runtime; install Java locally if you want to run the emulator test on a workstation.
-
-## 5. Pre-launch gates still requiring provider configuration
-
-- Replace every placeholder in `deploy/ecs-task-definition.json`.
-- Create the Firebase service account secret and least-privilege AWS roles.
-- Configure Razorpay production keys and webhook verification. Client-side payment verification is guarded, but a production payment flow should reconcile through Razorpay webhooks and an idempotent event store.
-- Put KYC assets behind private/authenticated Cloudinary delivery or private object storage. The upload signature protects the API secret and upload endpoint, but the current stored `secure_url` is still a delivery URL.
-- Resolve high/critical runtime dependency audit findings before releasing. Review development-tool findings separately because the production API image installs only runtime dependencies.
-- Replace the authenticated Firestore vehicle reads with a deliberately designed public vehicle projection if anonymous browsing is required.
+The Firestore rules test requires Java because the Firebase emulator runs on the JVM. CI's Ubuntu runner provides that runtime.
