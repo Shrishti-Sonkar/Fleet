@@ -107,23 +107,34 @@ export function AuthProvider({ children }) {
 
   const signup = async (email, password, name, phone, role = 'renter') => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
-    await setDoc(doc(db, 'users', cred.user.uid), {
+    const baseProfile = {
       uid: cred.user.uid,
       name,
       email,
       phone: phone || '',
-      // Vendor access is granted by an admin after review. Never trust a
-      // client-selected vendor role during account creation.
       role: 'renter',
-      vendorRequested: role === 'vendor',
-      ...(role === 'vendor' ? { vendorRequestedAt: serverTimestamp() } : {}),
       roleSetAt: serverTimestamp(),
       kycStatus: 'not_submitted',
       isVerified: false,
       verifiedBadge: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    })
+    }
+    const profileWithVendorReq = role === 'vendor'
+      ? { ...baseProfile, vendorRequested: true, vendorRequestedAt: serverTimestamp() }
+      : baseProfile
+
+    try {
+      await setDoc(doc(db, 'users', cred.user.uid), profileWithVendorReq)
+    } catch (err) {
+      if (role === 'vendor' && err?.code === 'permission-denied') {
+        await setDoc(doc(db, 'users', cred.user.uid), baseProfile)
+      } else {
+        throw err
+      }
+    }
+    const uDoc = await fetchAndMigrateUserDoc(cred.user.uid).catch(() => null)
+    setUserDoc(uDoc ?? { ...baseProfile, role: 'renter', vendorRequested: role === 'vendor' })
     return cred
   }
 

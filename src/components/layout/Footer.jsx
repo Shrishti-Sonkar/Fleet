@@ -57,7 +57,7 @@ export default function Footer() {
 
       {/* Copyright */}
       <div className="max-w-screen-2xl mx-auto px-gutter pt-8 border-t border-outline-variant text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-on-surface-variant font-body-lg text-body-lg opacity-70">© 2024 Fleet Technologies. All rights reserved.</p>
+        <p className="text-on-surface-variant font-body-lg text-body-lg opacity-70">© {new Date().getFullYear()} Fleet Mobilities. All rights reserved.</p>
         <div className="flex gap-8">
           <Link to={ROUTES.TERMS} className="text-on-surface-variant hover:text-primary text-label-md">Terms</Link>
           <Link to={ROUTES.PRIVACY} className="text-on-surface-variant hover:text-primary text-label-md">Privacy</Link>

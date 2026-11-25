@@ -482,7 +482,7 @@ export default function ProfilePage() {
                 {userDoc?.kycStatus === 'approved' ? '✅' : userDoc?.kycStatus === 'pending' ? '⏳' : '⚠️'}
               </span>
               <div>
-                <p className="text-sm font-bold text-on-surface">KYC Banner Alert</p>
+                <p className="text-sm font-bold text-on-surface">Identity Verification</p>
                 <p className="text-xs text-secondary mt-0.5">{kycBannerText}</p>
               </div>
             </div>

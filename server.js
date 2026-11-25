@@ -440,7 +440,7 @@ app.get('/api/health', (req, res) => {
 })
 
 app.use('/api', (req, res, next) => {
-  if (req.path === '/health') return next()
+  if (req.path === '/health' || req.path === '/public/site-config') return next()
   return requireFirebase(req, res, next)
 })
 
@@ -855,6 +855,19 @@ app.post('/api/bookings/:id/regenerate-code', requireAuth, async (req, res) => {
 
 // ── Public Site Config (for CMS-editable content on customer/vendor sites) ───
 app.get('/api/public/site-config', async (req, res) => {
+  const defaults = {
+    supportEmail: 'help@fleet.in',
+    supportPhone: '+91 98765 43210',
+    gstRate: 0.18,
+    platformFee: 99,
+    announcementEnabled: false,
+    announcementText: '',
+    heroTitle: '',
+    heroSubtitle: '',
+    footerTagline: 'Redefining exploration in the Himalayas through autonomous, premium rentals.',
+    cities: ['Dehradun', 'Mussoorie', 'Rishikesh'],
+  }
+  if (!db) return res.json(defaults)
   try {
     const [settingsSnap, contentSnap] = await Promise.all([
       db.collection('settings').doc('platform').get(),
@@ -863,22 +876,22 @@ app.get('/api/public/site-config', async (req, res) => {
     const settings = settingsSnap.exists ? settingsSnap.data() : {}
     const content = contentSnap.exists ? contentSnap.data() : {}
     return res.json({
-      supportEmail: settings.supportEmail || 'help@fleet.in',
-      supportPhone: settings.supportPhone || '+91 98765 43210',
-      gstRate: settings.gstRate ?? 0.18,
-      platformFee: settings.platformFee ?? 99,
+      supportEmail: settings.supportEmail || defaults.supportEmail,
+      supportPhone: settings.supportPhone || defaults.supportPhone,
+      gstRate: settings.gstRate ?? defaults.gstRate,
+      platformFee: settings.platformFee ?? defaults.platformFee,
       announcementEnabled: Boolean(content.announcementEnabled),
       announcementText: content.announcementText || '',
       heroTitle: content.heroTitle || '',
       heroSubtitle: content.heroSubtitle || '',
-      footerTagline: content.footerTagline || 'Redefining exploration in the Himalayas through autonomous, premium rentals.',
+      footerTagline: content.footerTagline || defaults.footerTagline,
       cities: Array.isArray(content.cities) && content.cities.length > 0
         ? content.cities
-        : ['Dehradun', 'Mussoorie', 'Rishikesh'],
+        : defaults.cities,
     })
   } catch (error) {
     console.error('Read public site config error:', error)
-    return res.status(500).json({ error: 'Unable to load site configuration' })
+    return res.json(defaults)
   }
 })
 

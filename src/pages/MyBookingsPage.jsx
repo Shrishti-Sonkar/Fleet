@@ -46,16 +46,40 @@ export default function MyBookingsPage() {
 
   useEffect(() => {
     if (!user) return
+    let unsubFallback = null
     const q = query(
       collection(db, 'bookings'),
       where('renterId', '==', user.uid),
       orderBy('createdAt', 'desc'),
     )
-    const unsub = onSnapshot(q, (snap) => {
-      setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      setLoading(false)
-    })
-    return unsub
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setLoading(false)
+      },
+      (err) => {
+        console.warn('Bookings ordered query failed, falling back:', err.message)
+        const fallbackQ = query(collection(db, 'bookings'), where('renterId', '==', user.uid))
+        unsubFallback = onSnapshot(
+          fallbackQ,
+          (snap) => {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+            list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+            setBookings(list)
+            setLoading(false)
+          },
+          () => {
+            setBookings([])
+            setLoading(false)
+          },
+        )
+      },
+    )
+    return () => {
+      unsub()
+      if (unsubFallback) unsubFallback()
+    }
   }, [user])
 
   const filtered = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter)

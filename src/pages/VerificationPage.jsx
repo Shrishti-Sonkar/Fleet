@@ -170,7 +170,7 @@ export default function VerificationPage() {
             KYC Verification Required
           </div>
           <h1 className="font-headline-md text-headline-md text-on-surface mb-3">Verify Your Identity</h1>
-          <p className="text-body-lg text-secondary">Only verified users can book vehicles on Fleet. Complete in 3 easy steps.</p>
+          <p className="text-body-lg text-secondary">Only verified users can book vehicles on Fleet. Complete in 4 easy steps.</p>
         </div>
 
         {/* Progress */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
 import { useAuth } from '../context/AuthContext'
 import { doc, getDoc } from 'firebase/firestore'
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { signin, signup, googleSignin, sendOTP, verifyOTP } = useAuth()
 
   // ── Role-aware post-login redirect ────────────────────────────────────────
@@ -33,7 +34,10 @@ export default function LoginPage() {
   }
 
   // ── Top-level tab: Sign In / Sign Up ─────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('signin')
+  const [activeTab, setActiveTab] = useState(location.pathname === '/signup' ? 'signup' : 'signin')
+  useEffect(() => {
+    if (location.pathname === '/signup') setActiveTab('signup')
+  }, [location.pathname])
 
   // ── Sign-In state ─────────────────────────────────────────────────────────
   const [loginTab, setLoginTab] = useState('email') // 'email' | 'otp'
@@ -87,10 +91,16 @@ export default function LoginPage() {
   // ── Handlers — Sign In ────────────────────────────────────────────────────
   const handleSignIn = async (e) => {
     e.preventDefault()
+    if (!email.trim() || !password) {
+      const msg = 'Please enter your email and password'
+      setSigninError(msg)
+      toast.error(msg)
+      return
+    }
     setSigninError('')
     setSigninLoading(true)
     try {
-      const cred = await signin(email, password, rememberMe)
+      const cred = await signin(email.trim(), password, rememberMe)
       toast.success('Welcome back to Fleet!')
       await handlePostLogin(cred.user)
     } catch (err) {

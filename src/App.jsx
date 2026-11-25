@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { ROUTES } from '@/lib/constants'
 import { isAdminPath, isAdminPortal, isVendorPortal } from '@/lib/portal'
 import { useAuth } from './context/AuthContext'
@@ -60,7 +60,9 @@ function PageLoader() {
 // Role-aware bottom nav
 function RoleNav() {
   const { user, isRenter, isVendor } = useAuth()
+  const { pathname } = useLocation()
   if (!user) return null
+  if (['/login', '/signup', '/forgot-password'].includes(pathname)) return null
   if (isRenter) return <RenterNav />
   if (isVendor) return <VendorNav />
   return null

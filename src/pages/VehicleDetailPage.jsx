@@ -17,8 +17,13 @@ export default function VehicleDetailPage() {
 
   const [activeTab, setActiveTab] = useState('Overview')
   const [activeThumb, setActiveThumb] = useState(0)
-  const [pickupDate, setPickupDate] = useState('Oct 24, 2024')
-  const [dropoffDate, setDropoffDate] = useState('Oct 26, 2024')
+  const formatDefaultDate = (offsetDays) => {
+    const d = new Date()
+    d.setDate(d.getDate() + offsetDays)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+  const [pickupDate, setPickupDate] = useState(() => formatDefaultDate(0))
+  const [dropoffDate, setDropoffDate] = useState(() => formatDefaultDate(2))
   const [helmetAddon, setHelmetAddon] = useState(true)
   const [insuranceAddon, setInsuranceAddon] = useState(false)
 
@@ -95,18 +100,12 @@ export default function VehicleDetailPage() {
               <h1 className="font-headline-lg text-headline-lg">{vehicle.name}</h1>
               <div className="flex items-center gap-2 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[20px]">location_on</span>
-                <span className="text-body-lg font-body-lg">Rajpur Road, {vehicle.city}, Uttarakhand</span>
+                <span className="text-body-lg font-body-lg">{vehicle.location || `${vehicle.city || 'Dehradun'}, Uttarakhand`}</span>
               </div>
             </div>
 
             {/* Gallery */}
             <div className="relative mb-12">
-              <div className="absolute top-4 right-4 z-10 flex gap-2">
-                <button className="flex items-center gap-2 bg-surface-container-lowest px-4 py-2 rounded-full border border-outline-variant hover:border-primary transition-all group">
-                  <span className="material-symbols-outlined text-primary group-hover:rotate-180 transition-transform duration-500">3d_rotation</span>
-                  <span className="text-label-md font-label-md font-bold text-on-surface">3D Model</span>
-                </button>
-              </div>
               <div className="bg-surface p-8 rounded-xl relative overflow-hidden mb-4 min-h-[400px] flex items-center justify-center stage-gradient">
                 <img
                   alt={`${vehicle.name} Main`}
