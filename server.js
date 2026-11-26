@@ -193,7 +193,9 @@ if (!getApps().length) {
     )
   }
 }
-const db = getApps().length ? getFirestore() : null
+const db = getApps().length
+  ? getFirestore(getApps()[0], 'default')
+  : null
 
 function requireFirebase(req, res, next) {
   if (db && getApps().length) return next()
@@ -1524,7 +1526,7 @@ app.delete('/api/admin/users/:uid', requireAuth, requireAdmin, async (req, res) 
       return res.status(400).json({ error: 'You cannot delete your own active admin session' })
     }
     await db.collection('users').doc(uid).delete()
-    await getAuth().deleteUser(uid).catch(() => {})
+    await getAuth().deleteUser(uid).catch(() => { })
     return res.json({ success: true })
   } catch (error) {
     console.error('Admin delete user error:', error)

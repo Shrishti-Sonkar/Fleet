@@ -3,16 +3,17 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBDc3IsQrYz5mJHUWYDgJGQaznAoaHb5AM",
+  authDomain: "fleet-official.firebaseapp.com",
+  projectId: "fleet-official",
+  storageBucket: "fleet-official.firebasestorage.app",
+  messagingSenderId: "197680969356",
+  appId: "1:197680969356:web:e85cbec4e78f6ff50a6da9",
+  measurementId: "G-4C6XMS9DS4"
 }
 
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+export const db = getFirestore(app, 'default')
 export default app

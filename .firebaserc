@@ -1,7 +1,7 @@
 {
   "projects": {
-    "default": "fleetmobilities-3ee31",
-    "production": "fleetmobilities-3ee31"
+    "default": "fleet-official",
+    "production": "fleet-official"
   },
   "targets": {},
   "etags": {}

@@ -69,11 +69,13 @@ service cloud.firestore {
         );
     }
 
+
     function trustedAssetUrl(url) {
-      return url.startsWith('https://res.cloudinary.com/')
-        || url.startsWith('https://firebasestorage.googleapis.com/')
-        || url.startsWith('https://storage.googleapis.com/');
+      return url.matches('https://res[.]cloudinary[.]com/.*')
+        || url.matches('https://firebasestorage[.]googleapis[.]com/.*')
+        || url.matches('https://storage[.]googleapis[.]com/.*');
     }
+
 
     function urlFieldsAreSafe() {
       return (
